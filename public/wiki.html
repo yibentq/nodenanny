@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wiki百科 · NodeNanny</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- 沿用面板主页(index.html)确定的青铜/暗色配色体系与字体搭配，这里不重新发明一套视觉语言，
+     只是针对"长文阅读"这个新场景，补三样主页不需要的东西：清晰的侧栏/内容分隔、
+     舒适的正文行宽与行高、粘性的页内目录——这三点是参考了多个受好评的文档/wiki
+     阅读产品(如成熟的技术文档站点常见的三栏布局：导航树+内容+页内锚点)后确定的
+     结构，配色和字体仍然100%复用项目现有的brass/teal/hairline体系。 -->
+<style>
+  :root {
+    --bg-a: #121a1c;
+    --bg-b: #0c1214;
+    --surface: #161e21;
+    --surface-2: #1a2124;
+    --hairline: #2b3538;
+    --text: #e4dcc8;
+    --text-muted: #8a8f8a;
+    --brass: #c8963e;
+    --brass-soft: #e0b667;
+    --brass-dim: #7d6534;
+    --teal: #4d8478;
+    --teal-soft: #7fada4;
+    --rust: #c05a44;
+    --rust-soft: #dd8468;
+    --mortar: rgba(200, 150, 62, 0.07);
+    --surface-glass: rgba(22, 30, 33, 0.64);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, 'PingFang SC', 'Hiragino Sans', 'Yu Gothic', 'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--brass-soft); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code, pre { font-family: 'IBM Plex Mono', monospace; }
+
+  /* ---------- 顶栏：面包屑 + 搜索，跨三栏固定在最上面 ---------- */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 24px;
+    background: var(--surface-glass);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar .brand {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--brass-soft);
+    white-space: nowrap;
+  }
+  .breadcrumb { font-size: 13px; color: var(--text-muted); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .breadcrumb .sep { margin: 0 6px; opacity: 0.5; }
+  .breadcrumb .current { color: var(--text); }
+
+  .search-box { position: relative; width: 260px; flex-shrink: 0; }
+  .search-box input {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .search-box input:focus { outline: none; border-color: var(--brass-dim); }
+
+  .home-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    color: var(--text-muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+  .home-link:hover { border-color: var(--brass-dim); color: var(--text); text-decoration: none; }
+
+  /* ---------- Wiki内容远程同步：顶栏按钮 + 确认弹窗 ---------- */
+  .sync-btn {
+    margin-left: auto;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    color: var(--text-muted);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .sync-btn:hover { border-color: var(--brass-dim); color: var(--text); }
+  .sync-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* 语言切换器：跟主面板(index.html)的.lang-switch保持同一套视觉语言 */
+  .lang-switch { display: flex; align-items: center; flex-shrink: 0; }
+  .lang-switch button {
+    background: none;
+    border: none;
+    border-right: 1px solid var(--hairline);
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+  .lang-switch button:last-child { border-right: none; }
+  .lang-switch button:hover { color: var(--text); }
+  .lang-switch button.active { color: var(--brass-soft); border-bottom: 1px solid var(--brass); }
+  .lang-switch button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 12, 13, 0.72);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-box {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    width: 520px;
+    max-width: 90vw;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--hairline);
+    font-weight: 600;
+    font-size: 15px;
+  }
+  .modal-body { padding: 16px 20px; overflow-y: auto; font-size: 13px; line-height: 1.7; }
+  .modal-foot {
+    padding: 14px 20px;
+    border-top: 1px solid var(--hairline);
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+  }
+  .modal-btn {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 13px;
+    padding: 7px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1px solid var(--hairline);
+    background: transparent;
+    color: var(--text-muted);
+  }
+  .modal-btn:hover { color: var(--text); }
+  .modal-btn.primary { background: var(--teal); border-color: var(--teal); color: #eafff8; }
+  .modal-btn.primary:hover { background: var(--teal-soft); }
+  .modal-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .diff-section { margin-bottom: 14px; }
+  .diff-section .label { font-weight: 600; margin-bottom: 4px; }
+  .diff-section.added .label { color: var(--teal-soft); }
+  .diff-section.changed .label { color: var(--brass-soft); }
+  .diff-section.removed .label { color: var(--rust-soft); }
+  .diff-file { color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; font-size: 12px; }
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    display: none;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+  }
+  .search-results.open { display: block; }
+  .search-results .item { padding: 10px 12px; border-bottom: 1px solid var(--hairline); cursor: pointer; }
+  .search-results .item:last-child { border-bottom: none; }
+  .search-results .item:hover { background: var(--mortar); }
+  .search-results .item .t { font-size: 13px; color: var(--text); font-weight: 500; }
+  .search-results .item .s { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .search-results .empty { padding: 14px; font-size: 13px; color: var(--text-muted); }
+
+  /* ---------- 三栏主体 ---------- */
+  .layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 760px) 220px;
+    justify-content: center;
+    gap: 32px;
+    padding: 28px 24px 80px;
+    max-width: 1320px;
+    margin: 0 auto;
+  }
+
+  /* 左侧分类树：明确的surface底色+hairline，跟内容区拉开视觉层次，
+     呼应研究里"侧栏跟内容缺乏区隔会打乱阅读视线"这条常见问题的解法。 */
+  .nav {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .nav .category { margin-bottom: 4px; }
+  .nav .category-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--brass-soft);
+    cursor: pointer;
+    border-radius: 6px;
+  }
+  .nav .category-title:hover { background: var(--mortar); }
+  .nav .category-title .arrow { transition: transform 0.15s; font-size: 10px; opacity: 0.6; }
+  .nav .category.collapsed .arrow { transform: rotate(-90deg); }
+  .nav .category.collapsed .pages { display: none; }
+  .nav .pages { display: flex; flex-direction: column; }
+  .nav .page-link {
+    padding: 7px 10px 7px 22px;
+    font-size: 13px;
+    color: var(--text-muted);
+    border-radius: 6px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+  }
+  .nav .page-link:hover { color: var(--text); background: var(--mortar); }
+  .nav .page-link.active { color: var(--brass-soft); border-left-color: var(--brass); background: var(--mortar); font-weight: 500; }
+
+  /* ---------- 中间：正文阅读区 ---------- */
+  .content {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 40px 48px;
+    min-height: 60vh;
+  }
+  .content .article-title {
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 30px;
+    color: var(--text);
+    margin: 0 0 6px;
+  }
+  .content .article-meta { font-size: 12px; color: var(--text-muted); margin-bottom: 28px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .content .article-meta .tag {
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    padding: 2px 10px;
+    color: var(--teal-soft);
+  }
+  .markdown-body { font-size: 15.5px; line-height: 1.85; color: var(--text); }
+  .markdown-body h2 {
+    font-family: 'Fraunces', serif;
+    font-size: 21px;
+    color: var(--brass-soft);
+    margin: 36px 0 14px;
+    padding-top: 8px;
+    border-top: 1px solid var(--hairline);
+  }
+  .markdown-body h2:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+  .markdown-body h3 { font-size: 16.5px; color: var(--text); margin: 26px 0 10px; }
+  .markdown-body p { margin: 0 0 16px; }
+  .markdown-body ul, .markdown-body ol { margin: 0 0 16px; padding-left: 22px; }
+  .markdown-body li { margin-bottom: 6px; }
+  .markdown-body code {
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.9em;
+    color: var(--teal-soft);
+  }
+  .markdown-body pre { background: #0e1416; border: 1px solid var(--hairline); border-radius: 8px; padding: 16px 18px; overflow-x: auto; margin: 0 0 20px; }
+  .markdown-body pre code { background: none; border: none; padding: 0; color: var(--text); }
+  /* ---------- 代码块"点击复制"按钮 ----------
+     渲染完marked.parse()之后，用JS给每个<pre>外面包一层.code-block-wrap
+     (相对定位)，按钮用绝对定位放在右上角，不改变<pre>本身内部结构，
+     避免跟marked/DOMPurify产出的HTML打架。 */
+  .code-block-wrap { position: relative; }
+  .code-block-wrap pre { margin: 0 0 20px; padding-right: 54px; }
+  .code-copy-btn {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 3px 9px;
+    cursor: pointer;
+    opacity: 0.75;
+    transition: opacity 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .code-block-wrap:hover .code-copy-btn { opacity: 1; }
+  .code-copy-btn:hover { color: var(--brass-soft); border-color: var(--brass-dim); }
+  .code-copy-btn.copied { color: var(--teal-soft); border-color: var(--teal); opacity: 1; }
+  .markdown-body strong { color: var(--brass-soft); }
+  .markdown-body blockquote {
+    border-left: 3px solid var(--brass-dim);
+    margin: 0 0 16px;
+    padding: 4px 16px;
+    color: var(--text-muted);
+  }
+  .markdown-body table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 14px; }
+  .markdown-body th, .markdown-body td { border: 1px solid var(--hairline); padding: 8px 12px; text-align: left; }
+  .markdown-body th { color: var(--brass-soft); background: var(--surface-2); }
+
+  /* kbRef 桥接卡片：wiki文章跟一键修复知识库的软关联入口 */
+  .kb-bridge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 28px;
+    padding: 12px 16px;
+    border: 1px solid var(--brass-dim);
+    background: var(--mortar);
+    border-radius: 8px;
+    font-size: 13px;
+  }
+  .kb-bridge .icon { color: var(--brass-soft); font-size: 16px; }
+  .kb-bridge .risk {
+    padding: 1px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .kb-bridge .risk.low { color: var(--teal-soft); border: 1px solid var(--teal); }
+  .kb-bridge .risk.medium { color: var(--brass-soft); border: 1px solid var(--brass); }
+  .kb-bridge .risk.high { color: var(--rust-soft); border: 1px solid var(--rust); }
+
+  /* 该语言暂无译文、回退显示中文原文时的提示条 */
+  .lang-fallback-notice {
+    margin: 0 0 20px;
+    padding: 9px 14px;
+    border: 1px dashed var(--hairline);
+    border-radius: 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .empty-state { color: var(--text-muted); font-size: 14px; padding: 40px; text-align: center; }
+
+  /* ---------- 右侧：页内目录，粘性跟随滚动 ---------- */
+  .toc {
+    position: sticky;
+    top: 76px;
+    align-self: start;
+    font-size: 13px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+  }
+  .toc .toc-label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 10px; }
+  .toc a { display: block; color: var(--text-muted); padding: 5px 0; border-left: 2px solid transparent; padding-left: 12px; }
+  .toc a:hover { color: var(--text); text-decoration: none; }
+  .toc a.active { color: var(--brass-soft); border-left-color: var(--brass); }
+
+  @media (max-width: 1100px) {
+    .layout { grid-template-columns: 240px minmax(0, 1fr); }
+    .toc { display: none; }
+  }
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; padding: 16px; }
+    .nav { position: static; max-height: none; }
+    .content { padding: 24px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="home-link" id="homeLink" href="/index.html">← 返回主面板</a>
+  <div class="brand" id="brandLabel">NodeNanny Wiki百科</div>
+  <div class="breadcrumb" id="breadcrumb">首页</div>
+  <div class="search-box">
+    <input type="text" id="searchInput" placeholder="搜索文章...（支持中文）" autocomplete="off">
+    <div class="search-results" id="searchResults"></div>
+  </div>
+  <div class="lang-switch" id="lang-switch" role="group" aria-label="Language"></div>
+  <button class="sync-btn" id="syncCheckBtn" title="从创始人维护的公开仓库检查Wiki内容是否有更新">检查更新</button>
+</div>
+
+<!-- Wiki同步确认弹窗：镜像覆盖式同步，点"确认覆盖"前必须先看过这里的diff清单。 -->
+<div class="modal-overlay" id="syncModal">
+  <div class="modal-box">
+    <div class="modal-head">Wiki内容更新确认</div>
+    <div class="modal-body" id="syncModalBody">检查中…</div>
+    <div class="modal-foot">
+      <button class="modal-btn" id="syncCancelBtn">取消</button>
+      <button class="modal-btn primary" id="syncApplyBtn" style="display:none;">确认覆盖</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <nav class="nav" id="navTree"></nav>
+  <main class="content" id="content">
+    <div class="empty-state">加载中...</div>
+  </main>
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.5/purify.min.js"></script>
+<script>
+// 整个页面不依赖任何构建步骤，跟项目里其它前端页面(index.html/terminal.html)风格一致。
+// markdown -> HTML 的转换和清洗全部放在这里(客户端)完成：
+//   1. marked.parse() 把服务端返回的原始markdown转成HTML
+//   2. DOMPurify.sanitize() 再清洗一遍，防止第三方教程原文里混入的<script>等内容
+//      被当成可执行HTML插入页面——wiki-manager.js文件头注释里已经说明过这条设计原则，
+//      这里是它在前端真正落地的地方。
+// ---------- 界面文案五语言字典（本轮新增） ----------
+// 跟主面板(index.html)复用同一套 localStorage 键(nodenanny-lang)和语言代码
+// (zh/en/ja/de/ru)，切主面板语言后打开wiki会自动跟随。
+// 只覆盖"界面壳"文案（导航、搜索框、按钮、提示语这些），Wiki同步(syncModal)
+// 那部分的详细diff/错误文案暂时保持中文——这部分是管理员向远程仓库同步内容用的
+// 低频功能，且当前config.json里wikiSync.owner/repo默认为空、从未被真正启用过，
+// 这次不在这个功能上花翻译成本，如实记录，不是遗漏。
+const WIKI_I18N = {
+  zh: {
+    code: '中',
+    pageTitle: 'Wiki百科 · NodeNanny',
+    home: '← 返回主面板',
+    brand: 'NodeNanny Wiki百科',
+    breadcrumbHome: '首页',
+    searchPlaceholder: '搜索文章...（支持中文）',
+    syncBtn: '检查更新',
+    syncBtnTitle: '从创始人维护的公开仓库检查Wiki内容是否有更新',
+    tocLabel: '本页目录',
+    loading: '加载中...',
+    loadFailed: (p) => `这篇文章加载失败：${p.msg}`,
+    treeLoadFailed: (p) => `加载分类失败：${p.msg}`,
+    httpRequestFailed: (p) => `请求失败：${p.status}`,
+    emptyWiki: 'Wiki百科还没有任何内容。',
+    copyBtn: '复制',
+    copiedBtn: '已复制',
+    kbBridge1: '这个问题在知识库里有对应的修复命令，风险级别：',
+    kbBridge2: '可在面板"在线终端"里查看并按分级规则执行。',
+    updatedAt: (p) => `更新于 ${p.date}`,
+    unavailableNotice: (p) => `此文章暂无${p.langName}译文，以下显示中文原文。`,
+    langNames: { zh: '中文', en: '英文', ja: '日文', de: '德文', ru: '俄文' },
+  },
+  en: {
+    code: 'EN',
+    pageTitle: 'Wiki · NodeNanny',
+    home: '← Back to Dashboard',
+    brand: 'NodeNanny Wiki',
+    breadcrumbHome: 'Home',
+    searchPlaceholder: 'Search articles...',
+    syncBtn: 'Check Updates',
+    syncBtnTitle: "Check whether the wiki content has updates from the maintainer's public repository",
+    tocLabel: 'On this page',
+    loading: 'Loading...',
+    loadFailed: (p) => `Failed to load this article: ${p.msg}`,
+    treeLoadFailed: (p) => `Failed to load categories: ${p.msg}`,
+    httpRequestFailed: (p) => `Request failed: ${p.status}`,
+    emptyWiki: 'The wiki has no content yet.',
+    copyBtn: 'Copy',
+    copiedBtn: 'Copied',
+    kbBridge1: 'This issue has a matching fix command in the knowledge base. Risk level: ',
+    kbBridge2: 'You can view and run it (following the risk rules) in the panel\'s "Terminal".',
+    updatedAt: (p) => `Updated ${p.date}`,
+    unavailableNotice: (p) => `This article has no ${p.langName} translation yet. Showing the original Chinese version below.`,
+    langNames: { zh: 'Chinese', en: 'English', ja: 'Japanese', de: 'German', ru: 'Russian' },
+  },
+  ja: {
+    code: '日',
+    pageTitle: 'Wiki · NodeNanny',
+    home: '← ダッシュボードに戻る',
+    brand: 'NodeNanny Wiki',
+    breadcrumbHome: 'ホーム',
+    searchPlaceholder: '記事を検索...',
+    syncBtn: '更新を確認',
+    syncBtnTitle: 'メンテナーの公開リポジトリでWiki内容の更新を確認します',
+    tocLabel: 'このページの目次',
+    loading: '読み込み中...',
+    loadFailed: (p) => `この記事の読み込みに失敗しました：${p.msg}`,
+    treeLoadFailed: (p) => `カテゴリの読み込みに失敗しました：${p.msg}`,
+    httpRequestFailed: (p) => `リクエストに失敗しました：${p.status}`,
+    emptyWiki: 'Wikiにはまだ内容がありません。',
+    copyBtn: 'コピー',
+    copiedBtn: 'コピー済み',
+    kbBridge1: 'この問題にはナレッジベースに対応する修復コマンドがあります。リスクレベル：',
+    kbBridge2: 'パネルの「ターミナル」でリスク区分に従って確認・実行できます。',
+    updatedAt: (p) => `更新日：${p.date}`,
+    unavailableNotice: (p) => `この記事にはまだ${p.langName}訳がありません。以下は中国語の原文です。`,
+    langNames: { zh: '中国語', en: '英語', ja: '日本語', de: 'ドイツ語', ru: 'ロシア語' },
+  },
+  de: {
+    code: 'DE',
+    pageTitle: 'Wiki · NodeNanny',
+    home: '← Zurück zum Dashboard',
+    brand: 'NodeNanny Wiki',
+    breadcrumbHome: 'Start',
+    searchPlaceholder: 'Artikel durchsuchen...',
+    syncBtn: 'Updates prüfen',
+    syncBtnTitle: 'Prüfen, ob es Aktualisierungen des Wiki-Inhalts im öffentlichen Repository des Betreibers gibt',
+    tocLabel: 'Auf dieser Seite',
+    loading: 'Wird geladen...',
+    loadFailed: (p) => `Artikel konnte nicht geladen werden: ${p.msg}`,
+    treeLoadFailed: (p) => `Kategorien konnten nicht geladen werden: ${p.msg}`,
+    httpRequestFailed: (p) => `Anfrage fehlgeschlagen: ${p.status}`,
+    emptyWiki: 'Das Wiki hat noch keine Inhalte.',
+    copyBtn: 'Kopieren',
+    copiedBtn: 'Kopiert',
+    kbBridge1: 'Für dieses Problem gibt es einen passenden Fix-Befehl in der Wissensdatenbank. Risikostufe: ',
+    kbBridge2: 'Du kannst ihn im Panel unter "Terminal" ansehen und gemäß der Risikoeinstufung ausführen.',
+    updatedAt: (p) => `Aktualisiert am ${p.date}`,
+    unavailableNotice: (p) => `Für diesen Artikel gibt es noch keine ${p.langName}-Übersetzung. Es wird die chinesische Originalversion angezeigt.`,
+    langNames: { zh: 'Chinesisch', en: 'Englisch', ja: 'Japanisch', de: 'Deutsch', ru: 'Russisch' },
+  },
+  ru: {
+    code: 'RU',
+    pageTitle: 'Wiki · NodeNanny',
+    home: '← Назад к панели',
+    brand: 'NodeNanny Wiki',
+    breadcrumbHome: 'Главная',
+    searchPlaceholder: 'Поиск статей...',
+    syncBtn: 'Проверить обновления',
+    syncBtnTitle: 'Проверить наличие обновлений содержимого wiki в публичном репозитории мейнтейнера',
+    tocLabel: 'На этой странице',
+    loading: 'Загрузка...',
+    loadFailed: (p) => `Не удалось загрузить статью: ${p.msg}`,
+    treeLoadFailed: (p) => `Не удалось загрузить категории: ${p.msg}`,
+    httpRequestFailed: (p) => `Ошибка запроса: ${p.status}`,
+    emptyWiki: 'В wiki пока нет содержимого.',
+    copyBtn: 'Копировать',
+    copiedBtn: 'Скопировано',
+    kbBridge1: 'Для этой проблемы в базе знаний есть соответствующая команда исправления. Уровень риска: ',
+    kbBridge2: 'Вы можете просмотреть и выполнить её в разделе панели «Терминал» согласно уровню риска.',
+    updatedAt: (p) => `Обновлено ${p.date}`,
+    unavailableNotice: (p) => `Для этой статьи пока нет перевода на ${p.langName}. Ниже показан оригинал на китайском.`,
+    langNames: { zh: 'китайский', en: 'английский', ja: 'японский', de: 'немецкий', ru: 'русский' },
+  },
+};
+
+(function () {
+  let treeData = [];
+  let currentCategory = null;
+  let currentSlug = null;
+  let kbEntriesCache = null;
+  let wikiLang = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0, 2);
+  if (!WIKI_I18N[wikiLang]) wikiLang = 'zh';
+  function wt() { return WIKI_I18N[wikiLang]; }
+
+  const navEl = document.getElementById('navTree');
+  const contentEl = document.getElementById('content');
+  const tocEl = document.getElementById('toc');
+  const breadcrumbEl = document.getElementById('breadcrumb');
+  const searchInput = document.getElementById('searchInput');
+  const searchResultsEl = document.getElementById('searchResults');
+
+  async function fetchJson(url, opts) {
+    const res = await fetch(url, opts);
+    // 本轮修复:此前这里固定拼中文"请求失败: "+状态码,即便界面已经切换成
+    // 英文/日文/德文/俄文,这句错误信息里的状态码说明依然是中文——现在改成
+    // 用wt()取当前语言对应的文案。
+    if (!res.ok) throw new Error(wt().httpRequestFailed({ status: res.status }));
+    return res.json();
+  }
+
+  // 给wiki内容接口的URL统一挂上当前语言，其它接口（kb/list、wiki-sync相关）
+  // 不受影响，继续保持原样。
+  function withLang(url) {
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}lang=${encodeURIComponent(wikiLang)}`;
+  }
+
+  function renderStatic() {
+    const s = wt();
+    document.title = s.pageTitle;
+    document.documentElement.lang = wikiLang;
+    document.getElementById('homeLink').textContent = s.home;
+    document.getElementById('homeLink').title = s.home;
+    document.getElementById('brandLabel').textContent = s.brand;
+    document.getElementById('searchInput').placeholder = s.searchPlaceholder;
+    document.getElementById('syncCheckBtn').textContent = s.syncBtn;
+    document.getElementById('syncCheckBtn').title = s.syncBtnTitle;
+    if (!currentCategory) {
+      breadcrumbEl.textContent = s.breadcrumbHome;
+    }
+  }
+
+  function buildLangSwitch() {
+    const el = document.getElementById('lang-switch');
+    el.innerHTML = Object.keys(WIKI_I18N).map((code) =>
+      `<button data-lang="${code}" class="${code === wikiLang ? 'active' : ''}">${WIKI_I18N[code].code}</button>`
+    ).join('');
+    el.querySelectorAll('button').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (btn.dataset.lang === wikiLang) return;
+        wikiLang = btn.dataset.lang;
+        localStorage.setItem('nodenanny-lang', wikiLang);
+        buildLangSwitch();
+        renderStatic();
+        // 语言变了，分类树的标题/摘要也要跟着换（各分类/文章按各自是否有该语言译文
+        // 独立回退，不是整体回退），当前正在看的文章也要用新语言重新拉取一次。
+        await reloadTreeAndCurrentPage();
+      });
+    });
+  }
+
+  function renderNav() {
+    navEl.innerHTML = '';
+    treeData.forEach((cat) => {
+      const catEl = document.createElement('div');
+      catEl.className = 'category';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'category-title';
+      titleEl.innerHTML = `<span>${escapeHtml(cat.title)}</span><span class="arrow">▾</span>`;
+      titleEl.addEventListener('click', () => catEl.classList.toggle('collapsed'));
+      const pagesEl = document.createElement('div');
+      pagesEl.className = 'pages';
+      cat.pages.forEach((p) => {
+        const link = document.createElement('div');
+        link.className = 'page-link';
+        link.textContent = p.title;
+        link.dataset.category = cat.categoryId;
+        link.dataset.slug = p.slug;
+        link.addEventListener('click', () => loadPage(cat.categoryId, p.slug));
+        pagesEl.appendChild(link);
+      });
+      catEl.appendChild(titleEl);
+      catEl.appendChild(pagesEl);
+      navEl.appendChild(catEl);
+    });
+  }
+
+  function highlightActiveNav() {
+    document.querySelectorAll('.nav .page-link').forEach((el) => {
+      el.classList.toggle(
+        'active',
+        el.dataset.category === currentCategory && el.dataset.slug === currentSlug
+      );
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+  }
+
+  async function getKbEntry(kbRef) {
+    if (!kbEntriesCache) {
+      try {
+        const data = await fetchJson('/api/kb/list');
+        kbEntriesCache = data.entries || [];
+      } catch (err) {
+        kbEntriesCache = [];
+      }
+    }
+    return kbEntriesCache.find((e) => e.id === kbRef) || null;
+  }
+
+  function buildToc() {
+    tocEl.innerHTML = '';
+    const headings = contentEl.querySelectorAll('.markdown-body h2, .markdown-body h3');
+    if (!headings.length) return;
+    const label = document.createElement('div');
+    label.className = 'toc-label';
+    label.textContent = wt().tocLabel;
+    tocEl.appendChild(label);
+    headings.forEach((h, i) => {
+      const id = 'heading-' + i;
+      h.id = id;
+      const a = document.createElement('a');
+      a.href = '#' + id;
+      a.textContent = h.textContent;
+      a.style.paddingLeft = h.tagName === 'H3' ? '22px' : '12px';
+      tocEl.appendChild(a);
+    });
+  }
+
+  async function loadPage(categoryId, slug) {
+    currentCategory = categoryId;
+    currentSlug = slug;
+    highlightActiveNav();
+    contentEl.innerHTML = `<div class="empty-state">${escapeHtml(wt().loading)}</div>`;
+    try {
+      const data = await fetchJson(withLang(`/api/wiki/page/${encodeURIComponent(categoryId)}/${encodeURIComponent(slug)}`));
+      const page = data.page;
+      const cat = treeData.find((c) => c.categoryId === categoryId);
+      breadcrumbEl.innerHTML =
+        `${escapeHtml(cat ? cat.title : categoryId)}<span class="sep">/</span><span class="current">${escapeHtml(page.title)}</span>`;
+
+      const rawHtml = marked.parse(page.content || '');
+      const safeHtml = DOMPurify.sanitize(rawHtml);
+
+      let kbBridgeHtml = '';
+      if (page.kbRef) {
+        const entry = await getKbEntry(page.kbRef);
+        if (entry) {
+          kbBridgeHtml = `
+            <div class="kb-bridge">
+              <span class="icon">⚙</span>
+              <span>${escapeHtml(wt().kbBridge1)}</span>
+              <span class="risk ${entry.riskLevel}">${entry.riskLevel}</span>
+              <span>${escapeHtml(wt().kbBridge2)}</span>
+            </div>`;
+        }
+      }
+
+      // 该语言暂无这篇文章的译文，服务端已经安静回退到中文——这里给用户一个
+      // 明确提示，而不是让人以为"这就是xx语言版本"（page.available由
+      // wiki-manager.js的getPage()计算：page.lang===page.requestedLang时才是true）。
+      let unavailableHtml = '';
+      if (page.available === false) {
+        const langName = wt().langNames[wikiLang] || wikiLang;
+        unavailableHtml = `<div class="lang-fallback-notice">${escapeHtml(wt().unavailableNotice({ langName }))}</div>`;
+      }
+
+      contentEl.innerHTML = `
+        <h1 class="article-title">${escapeHtml(page.title)}</h1>
+        <div class="article-meta">
+          ${page.updated ? `<span>${escapeHtml(wt().updatedAt({ date: page.updated }))}</span>` : ''}
+          ${(page.tags || []).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}
+        </div>
+        ${unavailableHtml}
+        ${kbBridgeHtml}
+        <div class="markdown-body">${safeHtml}</div>
+      `;
+      buildToc();
+      addCodeCopyButtons();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } catch (err) {
+      contentEl.innerHTML = `<div class="empty-state">${escapeHtml(wt().loadFailed({ msg: err.message }))}</div>`;
+    }
+  }
+
+  // 本轮修复：文章正文里的站内跳转链接（比如 [《常见坑》](./red-flags)、
+  // [《代理协议科普》](../03-network-knowledge/protocols-overview)）此前完全
+  // 没有绑定任何点击处理——marked.parse()只是原样把href转成<a>标签，点击后
+  // 浏览器会去跳一个真实不存在的相对路径，导致"点了没反应/跳到404"。
+  // 这里只解析两种markdown原文里实际在用的写法：
+  //   ./slug            —— 同一分类下的另一篇文章
+  //   ../categoryId/slug —— 跨分类跳转
+  // 解析不出来的（外部http(s)链接、纯锚点#、其它格式）一律不拦截，交给
+  // 浏览器/下面的外链分支处理，避免把没预料到的写法也吞掉导致"点了真的没反应"。
+  // ---------- 代码块"点击复制"按钮 ----------
+  // 在marked.parse() + DOMPurify.sanitize()渲染完成之后调用，给正文里
+  // 每个<pre>外面包一层相对定位的容器、右上角插入一个复制按钮。
+  // 说明：wiki.html目前整体还没有五语言机制(这是另一项工作量很大、
+  // 本轮明确没有排期的待办)，所以这个按钮的文案先保持跟页面其它UI文字
+  // 一致的硬编码中文，不是遗漏，等wiki整体走五语言时应该一起处理。
+  function addCodeCopyButtons() {
+    contentEl.querySelectorAll('.markdown-body pre').forEach((pre) => {
+      if (pre.parentElement && pre.parentElement.classList.contains('code-block-wrap')) return;
+      const wrap = document.createElement('div');
+      wrap.className = 'code-block-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'code-copy-btn';
+      btn.textContent = wt().copyBtn;
+      wrap.appendChild(btn);
+    });
+  }
+
+  // 复制按钮的点击处理挂在contentEl容器上做事件委托——正文每次loadPage()都会
+  // 整体重画，代理监听避免每次重新渲染都要重新给每个按钮单独绑定。
+  contentEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.code-copy-btn');
+    if (!btn) return;
+    const pre = btn.previousElementSibling;
+    const text = pre ? pre.textContent : '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = btn.textContent;
+      btn.textContent = wt().copiedBtn;
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1500);
+    } catch (err) {
+      // Clipboard API在非HTTPS/无权限环境下可能不可用，静默失败，用户仍可手动选中文本复制
+    }
+  });
+
+  function resolveInternalWikiLink(href) {
+    if (!href) return null;
+    const path = href.split('#')[0].replace(/\.md$/i, '');
+    if (!path) return null;
+    if (path.startsWith('./')) {
+      const slug = path.slice(2);
+      return slug ? { categoryId: currentCategory, slug } : null;
+    }
+    if (path.startsWith('../')) {
+      const rest = path.slice(3);
+      const parts = rest.split('/').filter(Boolean);
+      if (parts.length >= 2) {
+        return { categoryId: parts[0], slug: parts.slice(1).join('/') };
+      }
+      return null;
+    }
+    return null;
+  }
+
+  contentEl.addEventListener('click', (e) => {
+    const a = e.target.closest('a');
+    if (!a || !contentEl.contains(a)) return;
+    const href = a.getAttribute('href') || '';
+    if (!href || href.startsWith('#')) return; // 页内目录锚点，交给浏览器原生定位
+    if (/^https?:\/\//i.test(href)) {
+      // 外部链接：新标签页打开，不在wiki的SPA里跳走
+      e.preventDefault();
+      window.open(href, '_blank', 'noopener');
+      return;
+    }
+    const target = resolveInternalWikiLink(href);
+    if (target) {
+      e.preventDefault();
+      loadPage(target.categoryId, target.slug);
+    }
+    // 解析不出来的相对链接：不拦截，保留原生行为（宁可跳错，也不让点击完全没反应）
+  });
+
+  let searchDebounce = null;
+  searchInput.addEventListener('input', () => {
+    clearTimeout(searchDebounce);
+    const q = searchInput.value.trim();
+    if (!q) {
+      searchResultsEl.classList.remove('open');
+      return;
+    }
+    searchDebounce = setTimeout(async () => {
+      try {
+        const data = await fetchJson(withLang(`/api/wiki/search?q=${encodeURIComponent(q)}`));
+        renderSearchResults(data.results || []);
+      } catch (err) {
+        renderSearchResults([]);
+      }
+    }, 200);
+  });
+
+  function renderSearchResults(results) {
+    searchResultsEl.innerHTML = '';
+    if (!results.length) {
+      searchResultsEl.innerHTML = '<div class="empty">没有找到相关文章</div>';
+    } else {
+      results.forEach((r) => {
+        const item = document.createElement('div');
+        item.className = 'item';
+        item.innerHTML = `<div class="t">${escapeHtml(r.title)}</div><div class="s">${escapeHtml(r.categoryTitle)} · ${escapeHtml(r.summary || '')}</div>`;
+        item.addEventListener('click', () => {
+          loadPage(r.categoryId, r.slug);
+          searchResultsEl.classList.remove('open');
+          searchInput.value = '';
+        });
+        searchResultsEl.appendChild(item);
+      });
+    }
+    searchResultsEl.classList.add('open');
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-box')) searchResultsEl.classList.remove('open');
+  });
+
+  // ---------- Wiki内容远程同步：检查更新 -> 展示diff -> 用户确认 -> 覆盖 ----------
+  // 这是v29交接文档确认过的"直接覆盖式镜像同步"方案：不做逐条选择性接受，
+  // diff清单只是给用户看一眼"这次点确认会覆盖/删除哪些文件"，要嘛全量确认要嘛取消。
+  const syncModal = document.getElementById('syncModal');
+  const syncModalBody = document.getElementById('syncModalBody');
+  const syncApplyBtn = document.getElementById('syncApplyBtn');
+  const syncCancelBtn = document.getElementById('syncCancelBtn');
+  const syncCheckBtn = document.getElementById('syncCheckBtn');
+
+  function renderDiffSection(label, cls, files) {
+    if (!files || !files.length) return '';
+    const items = files.map((f) => `<div class="diff-file">${escapeHtml(f)}</div>`).join('');
+    return `<div class="diff-section ${cls}"><div class="label">${label}（${files.length}）</div>${items}</div>`;
+  }
+
+  function openSyncModal() {
+    syncModal.classList.add('open');
+    syncModalBody.textContent = '正在联系远程仓库，检查是否有更新…';
+    syncApplyBtn.style.display = 'none';
+  }
+  function closeSyncModal() {
+    syncModal.classList.remove('open');
+  }
+
+  syncCheckBtn.addEventListener('click', async () => {
+    openSyncModal();
+    try {
+      const resp = await fetch('/api/wiki-sync/check', { method: 'POST' });
+      const data = await resp.json();
+      if (!data.ok) {
+        const reasons = {
+          wiki_sync_not_configured: '还没有配置远程同步仓库（config.json 里的 wikiSync.owner/repo 为空），请先联系管理员配置。',
+          remote_wiki_path_empty_or_not_found: '远程仓库里指定路径下没有找到任何文件，请确认仓库地址和路径配置是否正确。',
+          remote_tree_truncated_too_large: '远程仓库文件太多导致列表被截断，本次无法安全比对，请联系管理员处理。'
+        };
+        syncModalBody.textContent = reasons[data.error] || `检查更新失败：${data.error || '未知错误'}`;
+        return;
+      }
+      if (!data.hasUpdate) {
+        syncModalBody.textContent = `当前已是最新（共 ${data.totalRemoteFiles} 个文件），没有需要更新的内容。`;
+        return;
+      }
+      const parts = [
+        renderDiffSection('新增文件', 'added', data.added),
+        renderDiffSection('内容变化', 'changed', data.changed),
+        renderDiffSection('远程已删除（确认后本地也会删除）', 'removed', data.removed)
+      ].filter(Boolean).join('');
+      syncModalBody.innerHTML = `<div style="margin-bottom:12px;color:var(--text-muted);">
+        检测到远程有更新。这是<b>直接覆盖式镜像同步</b>：点"确认覆盖"后，下面列出的文件会
+        直接用远程最新内容覆盖本地（如果你自己手动改过其中某个页面，改动会被覆盖，无法保留）。
+      </div>${parts}`;
+      syncApplyBtn.style.display = '';
+    } catch (err) {
+      syncModalBody.textContent = `请求失败：${err.message}`;
+    }
+  });
+
+  syncCancelBtn.addEventListener('click', closeSyncModal);
+  syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSyncModal(); });
+
+  syncApplyBtn.addEventListener('click', async () => {
+    syncApplyBtn.disabled = true;
+    syncApplyBtn.textContent = '覆盖中…';
+    try {
+      const resp = await fetch('/api/wiki-sync/apply', { method: 'POST' });
+      const data = await resp.json();
+      if (data.ok) {
+        syncModalBody.innerHTML = `<div style="color:var(--teal-soft);">已完成：新增/更新 ${data.downloadedCount} 个文件，删除 ${data.removedCount} 个文件。</div>`;
+        syncApplyBtn.style.display = 'none';
+        // 内容已经变化，重新加载分类树，避免用户还看着旧的导航结构
+        init();
+      } else {
+        const failList = (data.failures || []).map((f) => `${escapeHtml(f.relPath)}：${escapeHtml(f.error)}`).join('<br>');
+        syncModalBody.innerHTML = `<div style="color:var(--rust-soft);">部分文件同步失败，已同步的部分仍然生效，失败的文件下次检查更新时会重试：<br>${failList}</div>`;
+        syncApplyBtn.style.display = 'none';
+      }
+    } catch (err) {
+      syncModalBody.textContent = `请求失败：${err.message}`;
+    } finally {
+      syncApplyBtn.disabled = false;
+      syncApplyBtn.textContent = '确认覆盖';
+    }
+  });
+
+  async function loadTree() {
+    const data = await fetchJson(withLang('/api/wiki/tree'));
+    treeData = data.categories || [];
+    renderNav();
+  }
+
+  // 切换语言时调用：分类树要用新语言重新拉一次（各分类/文章标题各自独立回退，
+  // 不是整棵树一起回退），如果当前正看着某篇文章，也用新语言重新加载那篇文章
+  // （不是跳回首页——切个语言不该把人正在读的东西弄丢）。
+  async function reloadTreeAndCurrentPage() {
+    try {
+      await loadTree();
+      if (currentCategory && currentSlug) {
+        await loadPage(currentCategory, currentSlug);
+      } else if (treeData.length && treeData[0].pages.length) {
+        await loadPage(treeData[0].categoryId, treeData[0].pages[0].slug);
+      }
+    } catch (err) {
+      contentEl.innerHTML = `<div class="empty-state">${escapeHtml(wt().treeLoadFailed({ msg: err.message }))}</div>`;
+    }
+  }
+
+  async function init() {
+    buildLangSwitch();
+    renderStatic();
+    try {
+      await loadTree();
+      if (treeData.length && treeData[0].pages.length) {
+        loadPage(treeData[0].categoryId, treeData[0].pages[0].slug);
+      } else {
+        contentEl.innerHTML = `<div class="empty-state">${escapeHtml(wt().emptyWiki)}</div>`;
+      }
+    } catch (err) {
+      contentEl.innerHTML = `<div class="empty-state">${escapeHtml(wt().treeLoadFailed({ msg: err.message }))}</div>`;
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

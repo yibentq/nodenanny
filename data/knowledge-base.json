@@ -1,0 +1,384 @@
+{
+  "entries": [
+    {
+      "id": "xray-service-down",
+      "title": "xray/sing-box 服务进程退出",
+      "matchPatterns": [
+        "Failed to start",
+        "xray\\.service.*failed",
+        "sing-box.*exited"
+      ],
+      "explanation": {
+        "zh": "代理服务进程本身退出了，通常是配置文件写错、端口被占用，或者服务被systemd判定失败次数过多而不再自动拉起。先重启一次服务，如果反复退出再看日志具体报错。",
+        "en": "The proxy service process itself has exited — usually a config syntax error, a port conflict, or systemd giving up after too many failed restarts. Restart the service once; if it keeps exiting, check the detailed error log.",
+        "ja": "プロキシサービスのプロセス自体が終了しています。設定ファイルの誤り、ポートの競合、またはsystemdが再起動回数の上限に達して諦めた可能性があります。まず一度サービスを再起動し、繰り返し終了する場合は詳細なエラーログを確認してください。",
+        "de": "Der Proxy-Dienstprozess selbst wurde beendet — meist ein Konfigurationsfehler, ein Port-Konflikt, oder systemd hat nach zu vielen fehlgeschlagenen Neustarts aufgegeben. Starten Sie den Dienst einmal neu; wenn er weiterhin abstürzt, prüfen Sie das detaillierte Fehlerprotokoll.",
+        "ru": "Сам процесс прокси-службы завершился — обычно из-за ошибки конфигурации, конфликта портов или того, что systemd прекратил попытки после слишком многих неудачных перезапусков. Перезапустите службу один раз; если она продолжает завершаться, проверьте подробный журнал ошибок."
+      },
+      "fixCommands": [
+        "systemctl restart xray"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "tls-cert-expiring-soon",
+      "title": "TLS证书即将过期",
+      "matchPatterns": [
+        "certificate.*expir",
+        "x509: certificate has expired"
+      ],
+      "explanation": {
+        "zh": "TLS证书即将过期或已过期，客户端会因为证书校验失败连不上。如果用的是acme.sh自动续期，先手动强制续期一次并确认续期后的证书生效逻辑是否正确挂载到了服务里。",
+        "en": "The TLS certificate is about to expire or already has. Clients will fail the certificate check and be unable to connect. If you use acme.sh for auto-renewal, force a manual renewal once and confirm the renewed certificate is actually reloaded by the service.",
+        "ja": "TLS証明書の有効期限が近づいているか、すでに切れています。クライアントは証明書検証に失敗し接続できなくなります。acme.shで自動更新している場合は、一度手動で強制更新し、更新後の証明書がサービスに正しく反映されているか確認してください。",
+        "de": "Das TLS-Zertifikat läuft bald ab oder ist bereits abgelaufen. Clients scheitern an der Zertifikatsprüfung und können sich nicht verbinden. Falls acme.sh für die automatische Erneuerung verwendet wird, erzwingen Sie einmal eine manuelle Erneuerung und prüfen Sie, ob das erneuerte Zertifikat tatsächlich vom Dienst neu geladen wird.",
+        "ru": "Срок действия TLS-сертификата скоро истекает или уже истёк. Клиенты не пройдут проверку сертификата и не смогут подключиться. Если для автопродления используется acme.sh, выполните принудительное продление вручную один раз и убедитесь, что обновлённый сертификат действительно подхватывается службой."
+      },
+      "fixCommands": [
+        "acme.sh --renew -d your-domain.com --force",
+        "systemctl restart xray"
+      ],
+      "riskLevel": "medium",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "iptables-blocking-port",
+      "title": "iptables规则疑似封锁了代理端口",
+      "matchPatterns": [
+        "connection refused.*:(443|8443|2053)\\b",
+        "iptables.*DROP"
+      ],
+      "explanation": {
+        "zh": "本地连接测试失败但服务进程本身是活着的，常见原因是防火墙规则变化封住了端口。这里给的修复命令会清空iptables规则，影响面比较大，执行前请确认清楚当前防火墙上还有没有其它必须保留的规则（比如SSH端口的访问限制）。",
+        "en": "The service process is alive but local connectivity tests fail — often caused by a firewall rule change blocking the port. The fix command below flushes all iptables rules, which has a broad impact; before running it, make sure there are no other rules you need to keep (e.g. SSH port restrictions).",
+        "ja": "サービスプロセス自体は生きていますが、ローカル接続テストが失敗しています。ファイアウォールルールの変更でポートがブロックされているのが一般的な原因です。以下の修復コマンドはiptablesルールをすべてクリアするため影響範囲が大きく、実行前に他に維持すべきルール（SSHポート制限など）がないか必ず確認してください。",
+        "de": "Der Dienstprozess läuft, aber lokale Verbindungstests schlagen fehl — häufig durch eine Firewall-Regeländerung verursacht, die den Port blockiert. Der folgende Fix-Befehl löscht alle iptables-Regeln, was weitreichende Auswirkungen hat; stellen Sie vor der Ausführung sicher, dass keine anderen Regeln (z. B. SSH-Portbeschränkungen) erhalten bleiben müssen.",
+        "ru": "Процесс службы работает, но локальные тесты подключения не проходят — часто из-за изменения правил брандмауэра, блокирующих порт. Приведённая ниже команда исправления сбрасывает все правила iptables, что имеет широкое влияние; перед выполнением убедитесь, что нет других правил, которые нужно сохранить (например, ограничений на SSH-порт)."
+      },
+      "fixCommands": [
+        "iptables -F"
+      ],
+      "riskLevel": "high",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "disk-full-log-write-fail",
+      "title": "磁盘空间已满导致日志/服务异常",
+      "matchPatterns": [
+        "No space left on device",
+        "disk.*full",
+        "ENOSPC"
+      ],
+      "explanation": {
+        "zh": "磁盘空间被占满，通常是日志文件无限增长没有做轮转清理。可以先清一次旧日志释放空间，长期建议给日志加上logrotate配置，而不是每次手动清。",
+        "en": "Disk space is full, usually because log files have grown unbounded without rotation. Clear old logs once to free up space; long-term, set up logrotate for the logs instead of clearing manually each time.",
+        "ja": "ディスク容量が満杯になっています。通常はログファイルがローテーションされずに無制限に増え続けたことが原因です。まず古いログを一度クリアして容量を確保し、長期的には手動でのクリアではなくlogrotateの設定を行うことをお勧めします。",
+        "de": "Der Speicherplatz ist voll, meist weil Protokolldateien ohne Rotation unbegrenzt gewachsen sind. Löschen Sie einmal alte Protokolle, um Platz freizugeben; richten Sie langfristig logrotate ein, anstatt jedes Mal manuell zu bereinigen.",
+        "ru": "Дисковое пространство заполнено, обычно из-за того, что файлы журналов бесконтрольно растут без ротации. Один раз очистите старые журналы, чтобы освободить место; в долгосрочной перспективе настройте logrotate вместо ручной очистки каждый раз."
+      },
+      "fixCommands": [
+        "journalctl --vacuum-time=3d"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "vmess-ws-mux-mismatch",
+      "title": "vmess+ws 客户端反复掉线（疑似mux/分片参数不匹配）",
+      "matchPatterns": [
+        "websocket: bad handshake",
+        "unexpected EOF.*vmess"
+      ],
+      "explanation": {
+        "zh": "这类问题通常不是服务端进程本身挂了，而是客户端和服务端的ws path/mux参数没对上，或者中间有CDN/反代层对分片做了不兼容的处理。这条暂时没有能直接跑的shell修复命令，需要人工对比两边配置文件，先记录进知识库占位，后续如果找到通用修复步骤再补充fixCommands。",
+        "en": "This is usually not the server process crashing, but a mismatch in the ws path/mux parameters between client and server, or an incompatible CDN/reverse-proxy layer mangling fragmented frames. There's no direct shell fix for this yet — it needs manual comparison of both configs. Kept as a placeholder entry; fixCommands can be added once a general fix is found.",
+        "ja": "これは通常サーバープロセス自体がクラッシュしているのではなく、クライアントとサーバー間のwsパス/mux設定の不一致、または間にあるCDN/リバースプロキシ層が分割フレームを非互換に処理していることが原因です。今のところ直接実行できるシェル修復コマンドはなく、両方の設定を手動で比較する必要があります。汎用的な修正手順が見つかり次第fixCommandsを追加予定です。",
+        "de": "Dies liegt normalerweise nicht an einem abgestürzten Serverprozess, sondern an nicht übereinstimmenden ws-Pfad/Mux-Parametern zwischen Client und Server, oder an einer inkompatiblen CDN-/Reverse-Proxy-Schicht, die fragmentierte Frames falsch verarbeitet. Es gibt noch keine direkte Shell-Lösung dafür — ein manueller Vergleich beider Konfigurationen ist nötig. Als Platzhalter-Eintrag belassen; fixCommands können ergänzt werden, sobald eine allgemeine Lösung gefunden wird.",
+        "ru": "Обычно это не сбой самого серверного процесса, а несоответствие параметров ws path/mux между клиентом и сервером, либо несовместимый уровень CDN/обратного прокси, некорректно обрабатывающий фрагментированные кадры. Прямой команды для исправления пока нет — требуется ручное сравнение конфигураций обеих сторон. Оставлено как запись-заполнитель; fixCommands можно будет добавить после нахождения общего решения."
+      },
+      "fixCommands": [],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "usability-target-must-be-http",
+      "title": "二层可用性检测目标配置成了https(检测器只支持http)",
+      "codes": [
+        "USABILITY_TARGET_MUST_BE_HTTP"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "二层可用性检测器为了避免在SOCKS隧道里再手搓一层TLS握手，本身只实现了明文HTTP探测，但当前生效的探测目标是https://地址，这不代表节点故障，是探测目标配置跟检测器实现对不上。需要检查config.json里usabilityCheck.targetUrl，改成http://开头的地址。注意：如果你从没手动配置过targetUrl，说明当前代码的默认值本身就是https地址，会导致每次检测都返回这个结果，这种情况下请优先反馈给开发者确认，而不是自己反复重试。",
+        "en": "To avoid hand-rolling a TLS handshake inside the SOCKS tunnel, the layer-two usability checker only implements plain HTTP probing, but the currently effective probe target is an https:// address. This is not a node failure — the probe target configuration does not match what the checker actually supports. Check usabilityCheck.targetUrl in config.json and change it to an http:// address. Note: if you never configured targetUrl manually, this means the code's own default value is an https address, which would cause every check to return this result — in that case, please report it to the developer to confirm rather than retrying repeatedly.",
+        "ja": "二層可用性チェッカーはSOCKSトンネル内でTLSハンドシェイクを自前実装する複雑さを避けるため、平文HTTPの探測のみをサポートしています。しかし現在有効な探測対象はhttps://アドレスになっており、これはノード障害ではなく、探測対象の設定がチェッカーの実装と噛み合っていないことが原因です。config.jsonのusabilityCheck.targetUrlを確認し、http://で始まるアドレスに変更してください。注意：targetUrlを手動で設定したことがない場合、コード自体のデフォルト値がhttpsアドレスになっている可能性があり、毎回この結果が返ることになります。その場合は繰り返し試すのではなく、開発者に報告して確認してください。",
+        "de": "Um sich einen selbstgebauten TLS-Handshake innerhalb des SOCKS-Tunnels zu ersparen, unterstützt der Layer-2-Usability-Checker nur unverschlüsseltes HTTP-Probing, aber das aktuell wirksame Probe-Ziel ist eine https://-Adresse. Das bedeutet keinen Knotenausfall, sondern dass die Probe-Ziel-Konfiguration nicht zur tatsächlichen Implementierung des Checkers passt. Prüfen Sie usabilityCheck.targetUrl in config.json und ändern Sie es auf eine http://-Adresse. Hinweis: Falls targetUrl nie manuell konfiguriert wurde, bedeutet dies, dass der Standardwert im Code selbst eine https-Adresse ist, was bei jeder Prüfung zu diesem Ergebnis führen würde — in diesem Fall bitte dem Entwickler melden, statt wiederholt selbst zu testen.",
+        "ru": "Чтобы не реализовывать вручную TLS-рукопожатие внутри SOCKS-туннеля, проверка работоспособности второго уровня поддерживает только зондирование по обычному HTTP, но текущая действующая цель зондирования — адрес https://. Это не сбой узла, а несоответствие между настройкой цели зондирования и тем, что фактически поддерживает проверяющий модуль. Проверьте usabilityCheck.targetUrl в config.json и измените его на адрес http://. Примечание: если targetUrl никогда не настраивался вручную, значит значение по умолчанию в самом коде — это адрес https, из-за чего каждая проверка будет возвращать этот результат — в таком случае сообщите об этом разработчику для подтверждения, а не пытайтесь повторять проверку самостоятельно."
+      },
+      "fixCommands": [
+        "grep -n 'targetUrl' config/config.json"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "usability-checker-environment-issue",
+      "title": "二层检测本机环境问题(拉不起临时客户端/端口冲突)",
+      "codes": [
+        "USABILITY_XRAY_SPAWN_FAILED",
+        "USABILITY_NO_FREE_PORT",
+        "USABILITY_SOCKS_PORT_NOT_READY"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "二层可用性检测需要在本机临时拉起一个xray客户端进程来验证节点是否真的能用，这类错误说明这个临时进程本身没能正常起来（可能是xray没装或不在PATH里、本机找不到空闲端口、或者进程起来了但SOCKS端口一直连不上），跟节点本身是否可用没有直接关系。先确认服务器上执行`which xray`能找到二进制，再看是不是本机端口/资源紧张导致的偶发问题；如果持续出现，检查一下vless/reality参数是否跟服务端实际配置对得上。",
+        "en": "The layer-two usability check needs to temporarily spin up a local xray client process to verify whether the node actually works. This category of error means that temporary process itself failed to start properly (xray may not be installed or not in PATH, no free local port was available, or the process started but the SOCKS port never became reachable) — it is not directly related to whether the node itself is usable. First confirm `which xray` finds the binary on the server, then check whether this is a transient local port/resource pressure issue; if it keeps happening, verify that the vless/reality parameters actually match the server's real configuration.",
+        "ja": "二層可用性チェックでは、ノードが本当に使えるか検証するために、ローカルで一時的にxrayクライアントプロセスを起動する必要があります。このカテゴリのエラーは、その一時プロセス自体が正常に起動できなかったこと（xrayが未インストールかPATHにない、ローカルに空きポートが見つからない、またはプロセスは起動したがSOCKSポートに接続できない）を意味し、ノード自体が使えるかどうかとは直接関係ありません。まずサーバー上で`which xray`によりバイナリが見つかるか確認し、次にローカルポート/リソースが一時的に逼迫していないか確認してください。継続的に発生する場合は、vless/reality設定がサーバー側の実際の設定と一致しているか確認してください。",
+        "de": "Die Layer-2-Usability-Prüfung muss lokal vorübergehend einen xray-Client-Prozess starten, um zu prüfen, ob der Knoten tatsächlich funktioniert. Diese Fehlerkategorie bedeutet, dass dieser temporäre Prozess selbst nicht ordnungsgemäß starten konnte (xray ist möglicherweise nicht installiert oder nicht im PATH, es war kein freier lokaler Port verfügbar, oder der Prozess wurde gestartet, aber der SOCKS-Port war nie erreichbar) — dies steht nicht in direktem Zusammenhang damit, ob der Knoten selbst nutzbar ist. Prüfen Sie zunächst mit `which xray`, ob die Binärdatei auf dem Server gefunden wird, und dann, ob es sich um ein vorübergehendes Problem mit lokalen Ports/Ressourcen handelt; falls es weiterhin auftritt, prüfen Sie, ob die vless/reality-Parameter tatsächlich mit der realen Serverkonfiguration übereinstimmen.",
+        "ru": "Для проверки работоспособности второго уровня необходимо временно запустить локальный клиентский процесс xray, чтобы убедиться, что узел действительно работает. Эта категория ошибок означает, что сам временный процесс не смог корректно запуститься (возможно, xray не установлен или отсутствует в PATH, не нашлось свободного локального порта, либо процесс запустился, но порт SOCKS так и не стал доступен) — это не связано напрямую с тем, работоспособен ли сам узел. Сначала убедитесь, что команда `which xray` находит бинарный файл на сервере, затем проверьте, не является ли это временной проблемой с локальными портами/ресурсами; если проблема повторяется постоянно, проверьте, действительно ли параметры vless/reality соответствуют реальной конфигурации сервера."
+      },
+      "fixCommands": [
+        "which xray"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "usability-node-actually-unreachable",
+      "title": "二层检测判定节点实际不可用(隧道通了但目标连不上/超时/状态码不对)",
+      "codes": [
+        "USABILITY_BAD_STATUS_CODE",
+        "USABILITY_PROBE_TIMEOUT_CONNECT",
+        "USABILITY_PROBE_TIMEOUT_HTTP",
+        "USABILITY_PROBE_SOCKS_CONNECT_FAILED"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "这几种情况的共同点是：本机到临时xray客户端这一段已经确认没问题（SOCKS握手成功），但通过这个节点访问外部探测目标时，要么连不上、要么半天没响应超时、要么拿到了不符合预期的状态码。这说明问题出在节点这条链路本身——可能是节点被墙、出口IP被限速/封禁、或者服务端配置跟客户端订阅链接对不上，属于节点真的不可用，不是本机检测设施的问题。可以先手动用同一份订阅链接在客户端里连一次，确认是持续性故障还是探测目标本身网络抖动导致的偶发误判。",
+        "en": "What these cases have in common is that the segment from this machine to the temporary xray client has already been confirmed fine (SOCKS handshake succeeded), but when accessing the external probe target through this node, the request either failed to connect, timed out with no response, or returned an unexpected status code. This points to a problem in the node's own link — the node may be blocked, its egress IP may be rate-limited or banned, or the server-side config may no longer match the client subscription link. This is a genuine node outage, not a local detection facility issue. Try manually connecting once with the same subscription link in a real client to confirm whether this is a persistent failure or just an occasional false positive caused by the probe target itself having a network hiccup.",
+        "ja": "これらのケースに共通するのは、本機から一時xrayクライアントまでの区間はすでに問題ないことが確認済み（SOCKSハンドシェイク成功）ですが、このノード経由で外部の探測対象にアクセスした際に、接続できない、長時間応答がなくタイムアウトする、または想定外のステータスコードが返るという点です。これはノード自体のリンクに問題があることを示しています——ノードがブロックされている、出口IPがレート制限/禁止されている、またはサーバー側設定がクライアントのサブスクリプションリンクと一致しなくなっている可能性があり、ノードが実際に使用不可能な状態であり、ローカルの検出設備側の問題ではありません。同じサブスクリプションリンクで実際のクライアントから一度手動接続し、継続的な障害なのか、探測対象自体の一時的なネットワーク不調による誤判定なのかを確認してください。",
+        "de": "Das Gemeinsame an diesen Fällen ist, dass die Strecke von diesem Rechner zum temporären xray-Client bereits als in Ordnung bestätigt wurde (SOCKS-Handshake erfolgreich), aber beim Zugriff auf das externe Probe-Ziel über diesen Knoten entweder die Verbindung fehlschlug, ein Timeout ohne Antwort auftrat, oder ein unerwarteter Statuscode zurückgegeben wurde. Dies deutet auf ein Problem in der Verbindung des Knotens selbst hin — der Knoten könnte blockiert sein, seine ausgehende IP könnte gedrosselt oder gesperrt sein, oder die serverseitige Konfiguration stimmt nicht mehr mit dem Client-Abonnementlink überein. Dies ist ein echter Knotenausfall, kein Problem der lokalen Erkennungseinrichtung. Versuchen Sie, sich einmal manuell mit demselben Abonnementlink über einen echten Client zu verbinden, um zu prüfen, ob es sich um einen dauerhaften Ausfall oder nur um einen gelegentlichen Fehlalarm durch eine vorübergehende Netzwerkstörung des Probe-Ziels selbst handelt.",
+        "ru": "Общее в этих случаях то, что участок от этой машины до временного клиента xray уже подтверждён как исправный (рукопожатие SOCKS прошло успешно), но при обращении к внешней цели зондирования через этот узел либо не удалось подключиться, либо долго не было ответа и произошёл тайм-аут, либо был получен неожиданный код состояния. Это указывает на проблему именно в цепочке узла — узел может быть заблокирован, его исходящий IP может быть ограничен по скорости или забанен, либо конфигурация на стороне сервера больше не соответствует клиентской ссылке подписки. Это реальный сбой узла, а не проблема локального средства обнаружения. Попробуйте один раз вручную подключиться с той же ссылкой подписки в реальном клиенте, чтобы понять, постоянный ли это сбой или лишь случайное ложное срабатывание из-за временного сетевого сбоя самой цели зондирования."
+      },
+      "fixCommands": [],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "usability-detection-facility-issue",
+      "title": "二层检测手段本身出问题(不代表节点故障)",
+      "codes": [
+        "USABILITY_PROBE_TIMEOUT_GREETING",
+        "USABILITY_PROBE_TIMEOUT_LEGACY",
+        "USABILITY_PROBE_SOCKS_HANDSHAKE_FAILED",
+        "USABILITY_PROBE_UNKNOWN_ERROR",
+        "USABILITY_OUTER_TIMEOUT",
+        "USABILITY_UNEXPECTED_EXCEPTION",
+        "USABILITY_UNEXPECTED_ERROR"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "这几种情况都发生在SOCKS连接建立之前或检测流程本身异常，比如本机临时xray客户端对握手没有响应、整个检测流程超过20秒兜底超时仍未返回、或者检测代码内部抛出了未预期的异常。这些都属于检测手段本身出问题，明确不代表节点故障，不应该据此触发重启或者通知创始人节点异常。如果持续频繁出现，建议看一下`pm2 logs nodenanny-monitor`里的具体报错堆栈，可能是服务器资源紧张（CPU/内存）导致本机进程响应变慢。",
+        "en": "These cases all happen before the SOCKS connection is even established, or represent an anomaly in the checking process itself — for example, the local temporary xray client never responded to the handshake, the whole check exceeded the 20-second fallback timeout without returning, or the check code itself threw an unexpected exception. All of these are problems with the detection facility itself, and explicitly do not indicate a node failure — they should not be used to trigger a restart or to notify the founder that the node is down. If this keeps happening frequently, check the detailed error stack in `pm2 logs nodenanny-monitor` — it may be caused by server resource pressure (CPU/memory) slowing down the local process's response.",
+        "ja": "これらのケースはすべて、SOCKS接続が確立される前に発生するか、チェックプロセス自体の異常です——例えば、ローカルの一時xrayクライアントがハンドシェイクに一切応答しない、チェック全体が20秒のフォールバックタイムアウトを超えても返らない、またはチェックコード内部で予期しない例外がスローされた、などです。これらはすべて検出設備自体の問題であり、ノード障害を示すものではないことが明確であり、これを根拠に再起動をトリガーしたり、創業者にノード異常を通知したりすべきではありません。頻繁に継続する場合は、`pm2 logs nodenanny-monitor`で具体的なエラースタックを確認してください。サーバーリソース（CPU/メモリ）の逼迫によりローカルプロセスの応答が遅くなっている可能性があります。",
+        "de": "Diese Fälle treten alle auf, bevor die SOCKS-Verbindung überhaupt hergestellt wird, oder stellen eine Anomalie im Prüfprozess selbst dar — zum Beispiel hat der lokale temporäre xray-Client nie auf den Handshake reagiert, der gesamte Prüfvorgang hat das 20-Sekunden-Fallback-Timeout überschritten, ohne zurückzukehren, oder der Prüfcode selbst hat eine unerwartete Ausnahme ausgelöst. All dies sind Probleme der Erkennungseinrichtung selbst und bedeuten ausdrücklich keinen Knotenausfall — sie sollten nicht dazu verwendet werden, einen Neustart auszulösen oder den Gründer über eine Knotenstörung zu benachrichtigen. Falls dies weiterhin häufig auftritt, prüfen Sie den detaillierten Fehler-Stack in `pm2 logs nodenanny-monitor` — die Ursache könnte in einer Ressourcenknappheit des Servers (CPU/Speicher) liegen, die den lokalen Prozess verlangsamt.",
+        "ru": "Все эти случаи происходят либо до установления SOCKS-соединения, либо представляют собой аномалию самого процесса проверки — например, локальный временный клиент xray вообще не ответил на рукопожатие, вся проверка превысила резервный тайм-аут в 20 секунд без возврата результата, либо сам код проверки выбросил непредвиденное исключение. Всё это проблемы самого средства обнаружения и явно не свидетельствуют о сбое узла — на этом основании не следует запускать перезапуск или уведомлять основателя о неисправности узла. Если это продолжает часто происходить, посмотрите подробный стек ошибок в `pm2 logs nodenanny-monitor` — причиной может быть нехватка ресурсов сервера (ЦП/память), замедляющая отклик локального процесса."
+      },
+      "fixCommands": [
+        "free -h",
+        "uptime"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "usability-probe-response-hijacked-or-malformed",
+      "title": "目标返回了非HTTP格式的响应(疑似被劫持/篡改)",
+      "codes": [
+        "USABILITY_PROBE_BAD_RESPONSE_FORMAT"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "通过节点访问探测目标时，拿到的响应不是合法的HTTP格式（连状态行都解析不出来）。跟\"状态码不对\"是不同性质的问题——状态码不对说明请求正常完成只是结果不符合预期，这种情况是响应内容本身就不像一次正常的HTTP交互，可能是链路上有设备（比如ISP的运营商劫持、透明代理）在篡改流量，也可能是节点这端配置本身有问题把响应搞乱了。建议先换一个探测目标试试排除\"只是这一个目标网站抽风\"的可能，如果换目标仍然复现，值得怀疑这条链路本身有中间人篡改。",
+        "en": "When accessing the probe target through this node, the response received was not valid HTTP (not even the status line could be parsed). This is a different kind of problem from \"wrong status code\" — a wrong status code means the request completed normally but the result just wasn't what was expected, whereas this means the response content itself doesn't look like a normal HTTP exchange at all. This could mean something on the path (e.g. ISP-level hijacking, a transparent proxy) is tampering with the traffic, or that the node's own configuration is scrambling the response. Try switching to a different probe target first to rule out \"this one target site is just having issues\"; if it still reproduces with a different target, it's worth suspecting man-in-the-middle tampering on this link.",
+        "ja": "ノード経由で探測対象にアクセスした際に受け取ったレスポンスが正当なHTTP形式ではありません（ステータス行すら解析できません）。これは「ステータスコードが不正」とは性質が異なる問題です——ステータスコードが不正な場合はリクエスト自体は正常に完了しているが結果が期待通りでないだけですが、こちらはレスポンス内容自体が通常のHTTP通信のようには見えないケースです。経路上の何か（ISPによるハイジャック、透過プロキシなど）がトラフィックを改ざんしている可能性、またはノード側の設定自体がレスポンスを乱している可能性があります。まず探測対象を別のものに変えて「たまたまこのサイトが不調なだけ」という可能性を排除し、対象を変えても再現する場合は、この経路自体に中間者による改ざんがある疑いを持つ価値があります。",
+        "de": "Beim Zugriff auf das Probe-Ziel über diesen Knoten war die erhaltene Antwort kein gültiges HTTP-Format (nicht einmal die Statuszeile konnte geparst werden). Dies ist ein anderes Problem als ein \"falscher Statuscode\" — ein falscher Statuscode bedeutet, dass die Anfrage normal abgeschlossen wurde, das Ergebnis aber nicht den Erwartungen entsprach, während dies bedeutet, dass der Antwortinhalt selbst überhaupt nicht wie ein normaler HTTP-Austausch aussieht. Dies könnte bedeuten, dass etwas auf dem Weg (z. B. ISP-Hijacking, ein transparenter Proxy) den Datenverkehr manipuliert, oder dass die Konfiguration des Knotens selbst die Antwort durcheinanderbringt. Versuchen Sie zunächst ein anderes Probe-Ziel, um auszuschließen, dass \"nur diese eine Zielseite gerade Probleme hat\"; tritt es mit einem anderen Ziel weiterhin auf, lohnt sich der Verdacht auf eine Man-in-the-Middle-Manipulation auf dieser Verbindung.",
+        "ru": "При обращении к цели зондирования через этот узел был получен ответ, не являющийся корректным HTTP-форматом (не удалось разобрать даже строку статуса). Это отличается по своей природе от «неверного кода состояния» — неверный код состояния означает, что запрос завершился нормально, но результат просто не соответствовал ожиданиям, тогда как здесь само содержимое ответа вообще не похоже на обычный HTTP-обмен. Это может означать, что что-то на пути (например, перехват на уровне провайдера, прозрачный прокси) подделывает трафик, либо что конфигурация самого узла искажает ответ. Сначала попробуйте другую цель зондирования, чтобы исключить вариант «просто этот конкретный сайт сейчас барахлит»; если проблема повторяется с другой целью, стоит заподозрить вмешательство посредника (man-in-the-middle) на этом канале."
+      },
+      "fixCommands": [],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-checker-environment-issue",
+      "title": "节点池检测本机环境问题(拉不起sing-box临时客户端/端口冲突)",
+      "codes": [
+        "POOL_SINGBOX_SPAWN_FAILED",
+        "POOL_SINGBOX_PORT_NOT_READY",
+        "POOL_SINGBOX_START_FAILED"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "节点池的三层检测(alive/speed/authentic)需要在本机临时拉起一个sing-box进程来验证候选节点是否真的能用，这类错误说明这个临时进程本身没能正常起来(可能是sing-box没装或不在PATH里、本机找不到空闲端口、或者进程起来了但SOCKS5端口一直连不上)，跟候选节点本身是否可用没有直接关系。先确认服务器上执行`which sing-box`能找到二进制，再看是不是本机端口/资源紧张导致的偶发问题；如果持续出现，检查一下候选节点的协议参数是否本身就有问题导致sing-box无法生成有效配置。",
+        "en": "The pool's three-layer check (alive/speed/authentic) needs to temporarily spin up a local sing-box process to verify whether a candidate node actually works. This category of error means that temporary process itself failed to start properly (sing-box may not be installed or not in PATH, no free local port was available, or the process started but the SOCKS5 port never became reachable) — it is not directly related to whether the candidate node itself is usable. First confirm `which sing-box` finds the binary on the server, then check whether this is a transient local port/resource pressure issue; if it keeps happening, verify whether the candidate node's protocol parameters themselves are causing sing-box to fail to generate a valid config.",
+        "ja": "プールの三層チェック(alive/speed/authentic)では、候補ノードが本当に使えるか検証するために、ローカルで一時的にsing-boxプロセスを起動する必要があります。このカテゴリのエラーは、その一時プロセス自体が正常に起動できなかったこと(sing-boxが未インストールかPATHにない、ローカルに空きポートが見つからない、またはプロセスは起動したがSOCKS5ポートに接続できない)を意味し、候補ノード自体が使えるかどうかとは直接関係ありません。まずサーバー上で`which sing-box`によりバイナリが見つかるか確認し、次にローカルポート/リソースが一時的に逼迫していないか確認してください。継続的に発生する場合は、候補ノードのプロトコルパラメータ自体がsing-boxの有効な設定生成を妨げていないか確認してください。",
+        "de": "Die dreistufige Prüfung des Pools (alive/speed/authentic) muss lokal vorübergehend einen sing-box-Prozess starten, um zu prüfen, ob ein Kandidatenknoten tatsächlich funktioniert. Diese Fehlerkategorie bedeutet, dass dieser temporäre Prozess selbst nicht ordnungsgemäß starten konnte (sing-box ist möglicherweise nicht installiert oder nicht im PATH, es war kein freier lokaler Port verfügbar, oder der Prozess wurde gestartet, aber der SOCKS5-Port war nie erreichbar) — dies steht nicht in direktem Zusammenhang damit, ob der Kandidatenknoten selbst nutzbar ist. Prüfen Sie zunächst mit `which sing-box`, ob die Binärdatei auf dem Server gefunden wird, und dann, ob es sich um ein vorübergehendes Problem mit lokalen Ports/Ressourcen handelt; falls es weiterhin auftritt, prüfen Sie, ob die Protokollparameter des Kandidatenknotens selbst dazu führen, dass sing-box keine gültige Konfiguration erzeugen kann.",
+        "ru": "Трёхуровневая проверка пула (alive/speed/authentic) требует временного запуска локального процесса sing-box, чтобы убедиться, что узел-кандидат действительно работает. Эта категория ошибок означает, что сам временный процесс не смог корректно запуститься (возможно, sing-box не установлен или отсутствует в PATH, не нашлось свободного локального порта, либо процесс запустился, но порт SOCKS5 так и не стал доступен) — это не связано напрямую с тем, работоспособен ли сам узел-кандидат. Сначала убедитесь, что команда `which sing-box` находит бинарный файл на сервере, затем проверьте, не является ли это временной проблемой с локальными портами/ресурсами; если проблема повторяется постоянно, проверьте, не мешают ли параметры протокола самого узла-кандидата sing-box сгенерировать корректную конфигурацию."
+      },
+      "fixCommands": [
+        "which sing-box"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-node-actually-unreachable",
+      "title": "节点池检测发现候选节点真的不可用(隧道通了但目标连不上/超时/响应异常)",
+      "codes": [
+        "POOL_ALIVE_BAD_STATUS_CODE",
+        "POOL_SPEED_BAD_STATUS_CODE",
+        "POOL_PROBE_TIMEOUT_CONNECT",
+        "POOL_PROBE_SOCKS_CONNECT_FAILED",
+        "POOL_PROBE_HTTP_TIMEOUT",
+        "POOL_PROBE_CONNECTION_RESET",
+        "POOL_PROBE_TLS_HANDSHAKE_TIMEOUT",
+        "POOL_PROBE_TLS_HANDSHAKE_FAILED",
+        "POOL_AUTHENTIC_ALL_FAILED"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "这类错误出现时，本机sing-box进程和SOCKS5握手都已经正常完成(检测设施本身没问题)，卡住的是隧道建立之后到目标站点这一段——连接超时、HTTP请求超时、连接被对端提前关闭、或者TLS握手超时/失败。这说明候选节点大概率是真的有问题(比如出口网络被墙、节点服务端异常、或者节点到目标站点这条链路本身不通)，不是检测器误判。这类候选节点应该按检测结果正常降级/淘汰处理，一般不需要人工干预去\"修\"检测器本身。",
+        "en": "When this category of error occurs, the local sing-box process and the SOCKS5 handshake have already completed normally (the detection facility itself is fine) — what's stuck is the segment after the tunnel was established, on the way to the target site: connection timeout, HTTP request timeout, the connection being closed early by the remote end, or a TLS handshake timing out/failing. This indicates the candidate node most likely has a real problem (e.g. its outbound network is blocked, the node's server side is misbehaving, or the path from the node to the target site itself is broken) rather than a false positive from the checker. This category of candidate node should normally go through the standard downgrade/elimination path based on the check result — it usually doesn't need manual intervention to \"fix\" the checker itself.",
+        "ja": "このカテゴリのエラーが発生する時点で、ローカルのsing-boxプロセスとSOCKS5ハンドシェイクはすでに正常に完了しています(検知設備自体には問題ありません)。詰まっているのはトンネル確立後、目標サイトまでの区間——接続タイムアウト、HTTPリクエストタイムアウト、対端による接続の早期切断、またはTLSハンドシェイクのタイムアウト/失敗です。これは候補ノードに実際の問題がある可能性が高いこと(出口ネットワークが遮断されている、ノードのサーバー側に異常がある、あるいはノードから目標サイトまでの経路自体が通っていない等)を示しており、チェッカーの誤判定ではありません。このカテゴリの候補ノードは通常通り検知結果に基づいて降格/淘汰処理すればよく、通常はチェッカー自体を\"修理\"する人手の介入は不要です。",
+        "de": "Wenn diese Fehlerkategorie auftritt, sind der lokale sing-box-Prozess und der SOCKS5-Handshake bereits normal abgeschlossen (die Prüfeinrichtung selbst ist in Ordnung) — hängen bleibt der Abschnitt nach dem Tunnelaufbau auf dem Weg zur Zielseite: Verbindungs-Timeout, HTTP-Anfrage-Timeout, vorzeitiger Verbindungsabbruch durch die Gegenseite oder ein TLS-Handshake, der abläuft oder fehlschlägt. Dies deutet darauf hin, dass der Kandidatenknoten höchstwahrscheinlich ein echtes Problem hat (z. B. ist sein ausgehendes Netzwerk blockiert, die Serverseite des Knotens verhält sich fehlerhaft, oder der Pfad vom Knoten zur Zielseite selbst ist unterbrochen) und nicht um einen Fehlalarm des Checkers. Dieser Kandidatenknoten sollte normal über den Standard-Downgrade-/Eliminierungspfad basierend auf dem Prüfergebnis behandelt werden — in der Regel ist kein manueller Eingriff nötig, um den Checker selbst zu \"reparieren\".",
+        "ru": "Когда возникает эта категория ошибок, локальный процесс sing-box и рукопожатие SOCKS5 уже завершились нормально (сам механизм проверки в порядке) — застревает участок после установления туннеля, на пути к целевому сайту: тайм-аут соединения, тайм-аут HTTP-запроса, преждевременное закрытие соединения удалённой стороной, либо тайм-аут/сбой TLS-рукопожатия. Это указывает на то, что у узла-кандидата, скорее всего, есть реальная проблема (например, его исходящая сеть заблокирована, серверная сторона узла ведёт себя некорректно, либо сам путь от узла до целевого сайта не работает), а не на ложное срабатывание проверяющего модуля. Такой узел-кандидат должен пройти обычный путь понижения/исключения на основе результата проверки — как правило, вмешательство человека для \"исправления\" самого проверяющего модуля не требуется."
+      },
+      "fixCommands": [],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-checker-detection-facility-issue",
+      "title": "节点池检测手段本身问题(不代表候选节点故障)",
+      "codes": [
+        "POOL_PROBE_TIMEOUT_CONNECTING",
+        "POOL_PROBE_TIMEOUT_GREETING",
+        "POOL_PROBE_TIMEOUT_LEGACY",
+        "POOL_PROBE_SOCKS_HANDSHAKE_FAILED",
+        "POOL_PROBE_UNKNOWN_ERROR",
+        "POOL_CHECK_UNEXPECTED_ERROR",
+        "POOL_AUTHENTIC_CHECK_ERROR"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "connecting阶段超时是本机连sing-box自己起的SOCKS5端口都没连上，greeting阶段超时是本机sing-box进程对SOCKS5握手第一步没反应，这两种都发生在\"跟候选节点通信\"之前，只能说明本机检测环境这一轮偶发不正常(资源紧张/进程卡顿)，不代表候选节点真的有问题。SOCKS5握手失败、检测过程中出现意外异常(unknown_error/check_unexpected_error)也是同一类——先看是不是本机资源紧张导致的偶发问题，持续复现再排查sing-box本身是否有异常。",
+        "en": "A timeout at the connecting stage means the local machine couldn't even connect to the SOCKS5 port that sing-box itself just started; a timeout at the greeting stage means the local sing-box process didn't respond to the first step of the SOCKS5 handshake. Both happen before any communication with the candidate node even begins, so they only indicate that this particular check's local detection environment was transiently abnormal (resource pressure/process stalling) — they don't mean the candidate node actually has a problem. A SOCKS5 handshake failure or an unexpected error during the check (unknown_error/check_unexpected_error) falls in the same category — first check whether it's a transient local resource issue, and only dig into whether sing-box itself is misbehaving if it keeps recurring.",
+        "ja": "connectingステージのタイムアウトは、ローカルマシンがsing-box自身が起動したばかりのSOCKS5ポートにすら接続できなかったことを意味し、greetingステージのタイムアウトは、ローカルのsing-boxプロセスがSOCKS5ハンドシェイクの最初のステップに反応しなかったことを意味します。どちらも候補ノードとの通信が始まる前に発生しているため、今回のローカル検知環境が一時的に異常だった(リソース逼迫/プロセスの詰まり)ことを示すだけで、候補ノードに実際の問題があることは意味しません。SOCKS5ハンドシェイクの失敗や検知中の予期しない異常(unknown_error/check_unexpected_error)も同じカテゴリです——まずローカルリソースの一時的な逼迫でないか確認し、繰り返し発生する場合のみsing-box自体の異常を調べてください。",
+        "de": "Ein Timeout in der connecting-Phase bedeutet, dass der lokale Rechner nicht einmal eine Verbindung zu dem SOCKS5-Port herstellen konnte, den sing-box selbst gerade gestartet hat; ein Timeout in der greeting-Phase bedeutet, dass der lokale sing-box-Prozess nicht auf den ersten Schritt des SOCKS5-Handshakes reagiert hat. Beides geschieht, bevor überhaupt eine Kommunikation mit dem Kandidatenknoten beginnt, daher zeigt es nur an, dass die lokale Prüfumgebung bei dieser Prüfung vorübergehend gestört war (Ressourcenknappheit/hängender Prozess) — es bedeutet nicht, dass der Kandidatenknoten tatsächlich ein Problem hat. Ein SOCKS5-Handshake-Fehler oder ein unerwarteter Fehler während der Prüfung (unknown_error/check_unexpected_error) fällt in dieselbe Kategorie — prüfen Sie zunächst, ob es sich um ein vorübergehendes lokales Ressourcenproblem handelt, und untersuchen Sie sing-box selbst nur dann, wenn es wiederholt auftritt.",
+        "ru": "Тайм-аут на этапе connecting означает, что локальная машина не смогла подключиться даже к тому порту SOCKS5, который только что запустил сам sing-box; тайм-аут на этапе greeting означает, что локальный процесс sing-box не ответил на первый шаг рукопожатия SOCKS5. Оба случая происходят ещё до начала какого-либо взаимодействия с узлом-кандидатом, поэтому они лишь указывают на то, что локальная среда проверки в этот раз временно вела себя нестабильно (нехватка ресурсов/зависание процесса) — это не означает, что у узла-кандидата действительно есть проблема. Сбой рукопожатия SOCKS5 или непредвиденная ошибка в ходе проверки (unknown_error/check_unexpected_error) относятся к той же категории — сначала проверьте, не является ли это временной нехваткой локальных ресурсов, и разбирайтесь с самим sing-box только если проблема повторяется постоянно."
+      },
+      "fixCommands": [
+        "free -h",
+        "uptime"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-probe-response-hijacked-or-malformed",
+      "title": "节点池检测响应格式异常或跟目标不符(疑似劫持/伪造节点)",
+      "codes": [
+        "POOL_PROBE_BAD_RESPONSE_FORMAT",
+        "POOL_AUTHENTIC_TARGET_MISMATCH"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "隧道和握手都正常，但拿到的响应不是预期格式(HTTP状态行解析不出来)，或者authentic层验证的响应内容(状态码/响应体长度)跟预先约定的目标特征对不上，这两种情况都不是简单的\"连不上\"，而是拿到了响应，但响应内容本身有问题——常见原因是出口网络存在劫持/篡改，或者这个候选节点根本不是它自称的那个节点(伪造/浑水摸鱼)。建议对这类候选节点保持谨慎，不要轻易当作可信节点纳入池，必要时人工抽查一下这个节点的实际出口IP和响应内容。",
+        "en": "The tunnel and handshake both completed normally, but the response received either wasn't in the expected format (the HTTP status line couldn't be parsed) or, at the authentic layer, the response content (status code/body length) didn't match the pre-agreed target characteristics. Neither case is simply \"couldn't connect\" — instead, a response was received, but something about the response itself is wrong. Common causes include hijacking/tampering on the outbound network, or the candidate node not actually being what it claims to be (spoofed/fake). Treat this category of candidate node with caution — don't casually add it to the trusted pool — and if needed, manually spot-check this node's actual egress IP and response content.",
+        "ja": "トンネルとハンドシェイクはどちらも正常に完了しましたが、受け取ったレスポンスが期待される形式ではなかった(HTTPステータス行が解析できない)、あるいはauthenticレイヤーで検証したレスポンス内容(ステータスコード/レスポンスボディ長)が事前に定めた目標の特徴と一致しませんでした。どちらのケースも単なる「接続できない」ではなく、レスポンス自体は受け取ったが、その内容に問題があるケースです。よくある原因は出口ネットワークでの改ざん/ハイジャック、あるいはこの候補ノードが自称するノードと実際は異なる(偽装/なりすまし)ことです。このカテゴリの候補ノードは慎重に扱い、安易に信頼済みプールに加えないでください。必要であれば、このノードの実際の出口IPとレスポンス内容を手動で抜き取り確認することをお勧めします。",
+        "de": "Tunnel und Handshake wurden beide normal abgeschlossen, aber die empfangene Antwort hatte entweder nicht das erwartete Format (die HTTP-Statuszeile konnte nicht geparst werden), oder die auf der authentic-Ebene geprüfte Antwort (Statuscode/Body-Länge) stimmte nicht mit den vorab vereinbarten Zielmerkmalen überein. Keiner der beiden Fälle bedeutet einfach \"keine Verbindung\" — stattdessen wurde eine Antwort empfangen, aber mit der Antwort selbst stimmt etwas nicht. Häufige Ursachen sind Manipulation/Hijacking im ausgehenden Netzwerk oder dass der Kandidatenknoten in Wirklichkeit nicht das ist, was er vorgibt zu sein (gefälscht/vorgetäuscht). Behandeln Sie diese Kategorie von Kandidatenknoten mit Vorsicht — nehmen Sie sie nicht leichtfertig in den vertrauenswürdigen Pool auf — und prüfen Sie bei Bedarf manuell die tatsächliche Ausgangs-IP und den Antwortinhalt dieses Knotens.",
+        "ru": "Туннель и рукопожатие завершились нормально, но полученный ответ либо не соответствовал ожидаемому формату (не удалось разобрать строку статуса HTTP), либо на уровне authentic содержимое ответа (код статуса/длина тела) не совпало с заранее согласованными характеристиками цели. Ни один из этих случаев не является простым «не удалось подключиться» — на самом деле ответ был получен, но с самим содержимым ответа что-то не так. Частые причины — перехват/подмена трафика в исходящей сети, либо узел-кандидат на самом деле не является тем, за кого себя выдаёт (подделка/маскировка). К этой категории узлов-кандидатов следует относиться с осторожностью — не добавлять их в доверенный пул без раздумий — и при необходимости вручную проверить фактический исходящий IP и содержимое ответа этого узла."
+      },
+      "fixCommands": [],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-speed-below-threshold",
+      "title": "节点池测速通过连通但吞吐量低于阈值",
+      "codes": [
+        "POOL_SPEED_BELOW_THRESHOLD"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "这类结果说明候选节点隧道通、能拿到正确的HTTP响应，测速阶段也确实拿到了完整数据，但实测吞吐量(throughputKBps)低于配置的最低阈值(pool.checker.speedMinKBps)，这不是\"不可用\"，而是\"能用但慢\"——常见原因是节点带宽本身有限、跟测速目标(speed.cloudflare.com)之间的线路拥堵，或者阈值设置对这类节点偏高。可以先看看是不是同一批节点普遍偏低(可能是阈值需要调整)，还是只有个别节点偏低(节点本身线路问题)。",
+        "en": "This result means the candidate node's tunnel works and it received a correct HTTP response, and the speed-test stage did receive complete data — but the measured throughput (throughputKBps) came in below the configured minimum threshold (pool.checker.speedMinKBps). This isn't \"unusable\", it's \"usable but slow\" — common causes include the node's bandwidth genuinely being limited, congestion on the route to the speed-test target (speed.cloudflare.com), or the threshold being set too high for this category of node. Check whether this is happening broadly across a batch of nodes (the threshold may need adjusting) or only for individual nodes (a route problem specific to that node).",
+        "ja": "この結果は、候補ノードのトンネルが機能し、正しいHTTPレスポンスを受け取り、速度測定段階でも完全なデータを受け取れたことを意味しますが、実測スループット(throughputKBps)が設定された最低しきい値(pool.checker.speedMinKBps)を下回っています。これは「使えない」ではなく「使えるが遅い」です。よくある原因は、ノード自体の帯域幅が実際に制限されている、速度測定対象(speed.cloudflare.com)までの経路が混雑している、またはこのカテゴリのノードに対してしきい値の設定が高すぎることです。同じバッチのノードで広く低くなっているか(しきい値の調整が必要かもしれません)、それとも個別のノードだけが低いか(そのノード固有の経路問題)を確認してください。",
+        "de": "Dieses Ergebnis bedeutet, dass der Tunnel des Kandidatenknotens funktioniert und eine korrekte HTTP-Antwort empfangen wurde und die Geschwindigkeitstest-Phase tatsächlich vollständige Daten erhalten hat — aber der gemessene Durchsatz (throughputKBps) lag unter dem konfigurierten Mindestschwellenwert (pool.checker.speedMinKBps). Das bedeutet nicht \"unbrauchbar\", sondern \"brauchbar, aber langsam\" — häufige Ursachen sind eine tatsächlich begrenzte Bandbreite des Knotens, Überlastung auf der Route zum Geschwindigkeitstestziel (speed.cloudflare.com), oder ein für diese Knotenkategorie zu hoch angesetzter Schwellenwert. Prüfen Sie, ob dies breit über einen ganzen Batch von Knoten auftritt (der Schwellenwert muss eventuell angepasst werden) oder nur bei einzelnen Knoten (ein routenspezifisches Problem dieses Knotens).",
+        "ru": "Этот результат означает, что туннель узла-кандидата работает, и был получен корректный HTTP-ответ, а этап проверки скорости действительно получил полные данные — но измеренная пропускная способность (throughputKBps) оказалась ниже настроенного минимального порога (pool.checker.speedMinKBps). Это не «неработоспособен», а «работает, но медленно» — частые причины: реально ограниченная пропускная способность узла, перегрузка на маршруте до цели проверки скорости (speed.cloudflare.com), либо порог, установленный слишком высоко для этой категории узлов. Проверьте, наблюдается ли это массово у целой партии узлов (возможно, требуется скорректировать порог) или только у отдельных узлов (проблема маршрута конкретного узла)."
+      },
+      "fixCommands": [
+        "grep -n 'speedMinKBps' config/config.json config/config.example.json"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "pool-unsupported-protocol",
+      "title": "候选节点协议无法识别/暂不支持解析",
+      "codes": [
+        "POOL_UNSUPPORTED_PROTOCOL"
+      ],
+      "matchPatterns": [],
+      "explanation": {
+        "zh": "这个候选节点的订阅链接没能被解析成检测器当前认识的协议格式——可能是链接本身格式不标准(比如缺字段、编码损坏)，也可能是这个协议类型这一版检测器还没适配。这不代表这个节点连不上或者不可信，只是这一轮没办法对它做真实检测，不会进入可用节点池，也不影响同一批里其它候选节点的结果。如果同一个来源大量节点都命中这个结果，可以检查一下这个来源用的是不是一种还没适配的协议(比如某些小众协议)。",
+        "en": "This candidate node's subscription link could not be parsed into a protocol format the checker currently recognizes — this could mean the link itself is malformed (missing fields, corrupted encoding), or that this protocol type isn't supported by the checker yet. This does not mean the node is unreachable or untrustworthy; it just means this round couldn't run a real check on it, so it won't enter the usable node pool, and it doesn't affect the results for other candidates in the same batch. If many nodes from the same source hit this result, check whether that source uses a protocol type the checker doesn't support yet.",
+        "ja": "この候補ノードのサブスクリプションリンクは、検出器が現在認識しているプロトコル形式として解析できませんでした——リンク自体の形式が不正(フィールド欠落、エンコード破損など)であるか、このプロトコルタイプがこのバージョンの検出器でまだ対応していない可能性があります。これはノードに接続できない、または信頼できないという意味ではなく、今回はこのノードに対して実際の検査を実行できなかっただけです。利用可能なノードプールには入らず、同じバッチ内の他の候補ノードの結果には影響しません。同じ来源の多くのノードがこの結果になる場合は、その来源がまだ対応していないプロトコルタイプを使用していないか確認してください。",
+        "de": "Der Abonnement-Link dieses Kandidatenknotens konnte nicht in ein vom Prüfer derzeit erkanntes Protokollformat geparst werden — entweder ist der Link selbst fehlerhaft formatiert (fehlende Felder, beschädigte Kodierung), oder dieser Protokolltyp wird von dieser Version des Prüfers noch nicht unterstützt. Das bedeutet nicht, dass der Knoten nicht erreichbar oder nicht vertrauenswürdig ist — es bedeutet nur, dass in dieser Runde keine echte Prüfung durchgeführt werden konnte. Er gelangt nicht in den nutzbaren Knotenpool und beeinflusst nicht die Ergebnisse anderer Kandidaten in derselben Charge. Wenn viele Knoten derselben Quelle dieses Ergebnis liefern, prüfen Sie, ob diese Quelle einen vom Prüfer noch nicht unterstützten Protokolltyp verwendet.",
+        "ru": "Ссылку подписки этого узла-кандидата не удалось разобрать в формат протокола, распознаваемый текущей версией проверяющего модуля — это может означать, что сама ссылка имеет неверный формат (отсутствуют поля, повреждена кодировка), либо что этот тип протокола пока не поддерживается данной версией проверяющего модуля. Это не означает, что узел недоступен или ненадёжен — просто в этом раунде не удалось провести реальную проверку. Узел не попадёт в пул рабочих узлов, и это не влияет на результаты других узлов-кандидатов в той же партии. Если у многих узлов одного и того же источника встречается этот результат, проверьте, не использует ли этот источник тип протокола, который проверяющий модуль пока не поддерживает."
+      },
+      "fixCommands": [
+        "grep -c 'POOL_UNSUPPORTED_PROTOCOL' data/pool-events.json"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    },
+    {
+      "id": "github-discovery-token-missing",
+      "title": "GitHub候选来源发现:文件名搜索被跳过(缺少githubToken)",
+      "matchPatterns": [
+        "GitHub 代码搜索接口要求必须认证",
+        "githubToken"
+      ],
+      "explanation": {
+        "zh": "GitHub候选来源发现有两条独立路径:按topic标签搜索仓库不需要token(未认证限额每小时60次);按文件名搜索代码则是GitHub官方接口本身的限制,必须要认证token才能用,这条路径没配token就会被直接跳过,不是bug。如果想启用文件名搜索这条路径,需要在GitHub官网自己生成一个classic personal access token(不需要勾选任何权限,只是为了提高API访问额度),写入config.json的pool.discovery.githubToken字段。不填token不影响标签搜索路径正常工作,只是能发现的候选来源范围会更窄。",
+        "en": "GitHub candidate-source discovery has two independent paths: topic-tag search does not require a token (60 requests/hour unauthenticated rate limit); filename/code search is restricted by GitHub's own API and requires an authenticated token to use at all — without a token this path is simply skipped, which is not a bug. To enable the filename-search path, generate a classic personal access token on github.com (no scopes need to be checked, it's only to raise the API rate limit) and put it in config.json's pool.discovery.githubToken field. Leaving it empty does not break the tag-search path; it just narrows the range of candidate sources that can be discovered.",
+        "ja": "GitHub候補ソース発見には2つの独立した経路があります:トピックタグ検索はトークン不要(未認証は1時間あたり60リクエストの制限);ファイル名検索はGitHub自身のAPI制限により認証トークンが必須で、トークンが未設定の場合この経路は単にスキップされます。これはバグではありません。ファイル名検索経路を有効にするには、github.comでclassic personal access token(権限は一切チェック不要、APIレート制限を上げるためだけ)を生成し、config.jsonのpool.discovery.githubTokenフィールドに設定してください。トークンを設定しなくてもタグ検索経路は正常に動作し、発見できる候補ソースの範囲が狭くなるだけです。",
+        "de": "Die GitHub-Kandidatenquellenerkennung hat zwei unabhängige Pfade: Die Topic-Tag-Suche benötigt kein Token (unauthentifiziertes Limit: 60 Anfragen/Stunde); die Dateinamen-Suche wird durch GitHubs eigene API-Beschränkung reguliert und erfordert zwingend ein authentifiziertes Token — ohne Token wird dieser Pfad einfach übersprungen, das ist kein Fehler. Um den Dateinamen-Suchpfad zu aktivieren, erstellen Sie auf github.com ein Classic Personal Access Token (keine Berechtigungen müssen angekreuzt werden, es dient nur zur Erhöhung des API-Limits) und tragen Sie es in das Feld pool.discovery.githubToken in config.json ein. Ohne Token funktioniert der Tag-Suchpfad weiterhin normal, es werden lediglich weniger Kandidatenquellen gefunden.",
+        "ru": "Обнаружение кандидатных источников GitHub имеет два независимых пути: поиск по тегам тем не требует токена (лимит без аутентификации — 60 запросов/час); поиск по имени файла ограничен самим API GitHub и требует токена аутентификации — без токена этот путь просто пропускается, это не ошибка. Чтобы включить путь поиска по имени файла, создайте на github.com classic personal access token (не нужно отмечать никакие разрешения, это только для повышения лимита API) и укажите его в поле pool.discovery.githubToken файла config.json. Без токена путь поиска по тегам продолжает работать нормально, просто сужается диапазон обнаруживаемых источников-кандидатов."
+      },
+      "fixCommands": [
+        "grep -n 'githubToken' config/config.json"
+      ],
+      "riskLevel": "low",
+      "verified": true,
+      "source": "seed"
+    }
+  ]
+}

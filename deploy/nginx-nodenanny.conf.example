@@ -1,0 +1,51 @@
+# NodeNanny 面板的 Nginx 反向代理参考配置
+#
+# 用法（宝塔面板，推荐）：
+#   1. 宝塔面板 → 网站 → 添加站点
+#      - 有域名：域名填你的域名（例如 nanny.example.com）
+#      - 没有域名：域名填服务器公网 IP，或随便填一个占位域名也行（不影响直接用 IP 访问）
+#   2. 添加完站点后，进入该站点设置 → 反向代理 → 添加反向代理
+#      - 目标 URL 填：http://127.0.0.1:8787
+#      - 发送域名：$http_host（不要填 $host——如果你用的是非标准端口，$host 会把端口号丢掉，
+#        导致面板自己算出来的访问地址不完整，智能订阅这类需要面板自引用的功能会连不上）
+#   3.（有域名才能做这步）站点设置 → SSL → Let's Encrypt → 申请，勾选强制 HTTPS
+#      宝塔会自动把证书和反代规则一起写进 Nginx 配置，不需要手动改这个文件。
+#
+# 下面这份是等价的手写配置，供你核对宝塔生成的内容，或者不用宝塔、
+# 想自己维护 Nginx 时直接参考。
+
+# ---------- 有域名 + HTTPS（用 certbot 申请证书后）----------
+server {
+    listen 80;
+    server_name nanny.example.com;      # 改成你的域名
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name nanny.example.com;      # 改成你的域名
+
+    ssl_certificate     /etc/letsencrypt/live/nanny.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/nanny.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8787;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;   # 面板靠这个头识别自己是被 HTTPS 访问，登录 Cookie 才会带上 Secure
+    }
+}
+
+# ---------- 没有域名，先只用 IP + HTTP（没有 HTTPS，密码是明文传输，尽快换成上面那种方案）----------
+# server {
+#     listen 80;
+#     server_name _;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:8787;
+#         proxy_set_header Host $http_host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#     }
+# }

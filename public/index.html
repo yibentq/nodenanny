@@ -1,0 +1,2873 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NodeNanny</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png?v=2">
+<link rel="shortcut icon" type="image/png" href="/assets/favicon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-a: #121a1c;
+    --bg-b: #0c1214;
+    --surface: #161e21;
+    --surface-2: #1a2124;
+    --hairline: #2b3538;
+    --text: #e4dcc8;
+    --text-muted: #8a8f8a;
+    --brass: #c8963e;
+    --brass-soft: #e0b667;
+    --brass-dim: #7d6534;
+    --teal: #4d8478;
+    --teal-soft: #7fada4;
+    --rust: #c05a44;
+    --rust-soft: #dd8468;
+    --unknown: #5b6265;
+    --mortar: rgba(200, 150, 62, 0.07);
+    --relic-glow: rgba(200, 150, 62, 0.18);
+    --patina-mid: #8a7a45;
+    --surface-glass: rgba(22, 30, 33, 0.64);
+
+    /* 四角铜制包边构件，抽成变量，方便后面按语言叠加不同的文化背景层而不用重复写四遍 */
+    --corner-brackets:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 13 V1 H13' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='1' cy='1' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M15 13 V1 H3' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='15' cy='1' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 3 V15 H13' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='1' cy='15' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M15 3 V15 H3' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='15' cy='15' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E");
+    --corner-positions: top 10px left 10px, top 10px right 10px, bottom 10px left 10px, bottom 10px right 10px;
+    --corner-sizes: 16px 16px, 16px 16px, 16px 16px, 16px 16px;
+    --corner-repeats: no-repeat, no-repeat, no-repeat, no-repeat;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 1100px 640px at 78% -8%, #1c2620 0%, transparent 55%),
+      linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, 'PingFang SC', 'Hiragino Sans', 'Yu Gothic',
+      'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    /* 关键一行：position:relative 配 z-index:auto 不会让 body 自己开一个新的层叠
+       上下文，body::before/::after 里 z-index:-1 的打光层/齿轮水印会因此"穿透"到
+       更外层的层叠上下文里排位置，反而排在 body 自己的不透明背景后面、被盖住
+       （跟铆钉那次是同一类"缺一个显式层叠上下文"的问题，只是这次是 body 自己）。
+       显式给个 z-index，让 body 自己开一个层叠上下文，::before/::after 才会在
+       "body 自身背景"和"卡片等正常内容"两层之间正确显示出来。 */
+    z-index: 0;
+  }
+
+  /* ---------- 石砌背景层 + 按语言切换的"打光"效果 ----------
+     之前那五套纹样 SVG（云雷纹/青海波/锻铁涡卷/木结构方格/洋葱顶）本次整体
+     放弃——不是纹样本身画错了，而是"手绘出让人一眼认出文化归属的具体图形"这
+     条路本来就在更早期会话里被创始人三轮打回过一次（当时是建筑剪影），这次
+     纹样虽然改成了抽象回旋纹，本质上还是同一类"用线条图案表意"的路线，容易
+     做得单薄。改成更简单、更不容易翻车的思路：不再画图案，而是给整个页面
+     背景打一层有方向、有颜色的"光"——五种语言只是打光的方位角和颜色不同，
+     像是同一座灯塔在不同季节/角度被太阳照到的样子，而不是五套互不相关的图形。
+     颜色沿用原来纹样定下的那五个"青铜氧化阶段"色系（不重新拍板配色），
+     方向按五个不同方位分布，一眼能区分出当前是哪种语言：
+       zh 中文 → 左上方打光，亮金色
+       ja 日文 → 右上方打光，铜绿色（呼应原本纹样里"海面反光"这个意象）
+       en 英文 → 左侧偏中打光，暖铜色
+       de 德文 → 左下方打光，深古铜棕
+       ru 俄文 → 右下方打光，琥珀铜色
+     实现方式：body::before 是一层固定定位的大椭圆径向渐变（光源）+ 一层极淡的
+     石材纹理（保留原有质感，跟语言无关，一直存在）。语言切换时只是通过
+     html[lang=...] 覆盖 --light-x/--light-y/--light-color 这三个自定义属性，
+     不需要新增任何 JS，document.documentElement.lang 早就在切换时同步更新了。 */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    pointer-events: none;
+    --light-x: 15%;
+    --light-y: 8%;
+    --light-color: rgba(224, 182, 103, 0.16);
+    background-repeat: no-repeat, repeat;
+    background-position: center, center;
+    background-size: cover, 240px 240px;
+    background-image:
+      radial-gradient(ellipse 60% 50% at var(--light-x) var(--light-y), var(--light-color) 0%, transparent 68%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cline x1='14' y1='14' x2='14' y2='186' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.28'/%3E%3Crect x='84' y='84' width='32' height='32' fill='%23c8963e' fill-opacity='0.12'/%3E%3Cpath d='M28,28 H172 V172 H64 V64 H136 V136 H100' fill='none' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.3' stroke-linejoin='round'/%3E%3C/svg%3E");
+  }
+  html[lang="zh"] body::before { --light-x: 15%; --light-y: 8%;  --light-color: rgba(224, 182, 103, 0.16); }
+  html[lang="ja"] body::before { --light-x: 88%; --light-y: 10%; --light-color: rgba(111, 160, 143, 0.16); }
+  html[lang="en"] body::before { --light-x: 8%;  --light-y: 55%; --light-color: rgba(185, 138, 82, 0.16); }
+  html[lang="de"] body::before { --light-x: 14%; --light-y: 94%; --light-color: rgba(122, 92, 52, 0.18); }
+  html[lang="ru"] body::before { --light-x: 90%; --light-y: 90%; --light-color: rgba(193, 122, 58, 0.17); }
+
+  /* 大尺寸齿轮水印，压在页面最外层留白处（宽屏时 .page 两侧的空白），
+     极低透明度，只在宽屏能瞥见一角，起"填补空旷"的作用，不会跟卡片内容打架。 */
+  body::after {
+    content: '';
+    position: fixed;
+    right: -120px;
+    bottom: -120px;
+    width: 460px;
+    height: 460px;
+    z-index: -1;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23c8963e' stroke-width='2.5'%3E%3Ccircle cx='50' cy='50' r='34'/%3E%3Ccircle cx='50' cy='50' r='14'/%3E%3Cg%3E%3Crect x='45' y='0' width='10' height='18'/%3E%3Crect x='45' y='82' width='10' height='18'/%3E%3Crect x='0' y='45' width='18' height='10'/%3E%3Crect x='82' y='45' width='18' height='10'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(30 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(60 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(120 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(150 50 50)'/%3E%3Crect x='45' y='82' width='10' height='18' transform='rotate(30 50 50)'/%3E%3Crect x='45' y='82' width='10' height='18' transform='rotate(60 50 50)'/%3E%3Crect x='45' y='82' width='10' height='18' transform='rotate(120 50 50)'/%3E%3Crect x='45' y='82' width='10' height='18' transform='rotate(150 50 50)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-size: contain;
+  }
+  @media (max-width: 760px) {
+    body::after { display: none; }
+  }
+
+  body {
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px 90px;
+  }
+
+  .page { width: 100%; max-width: 980px; }
+
+  /* ---------- 顶栏：图腾 + 语言切换 ---------- */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 40px;
+  }
+
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand svg { width: 26px; height: 26px; flex-shrink: 0; }
+  .brand-word {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 18px;
+    letter-spacing: 0.01em;
+  }
+
+  .topbar-nav { display: flex; align-items: center; gap: 10px; }
+
+  /* 导航按钮 v2（UI改版）：原来是通用的矩形描边按钮，跟语言切换的"标签式下划线"
+     风格不统一。改成带小图标+下划线强调的标签样式，跟 .lang-switch 的视觉语言
+     统一起来，不再是孤零零两个方框按钮。 */
+  .wiki-entry-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 5px 2px 6px;
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .wiki-entry-link svg { width: 14px; height: 14px; flex-shrink: 0; opacity: 0.85; }
+  .wiki-entry-link:hover { color: var(--brass-soft); border-bottom-color: var(--brass-dim); text-decoration: none; }
+  /* 终端入口这次改成了<button>(要挂JS打开悬浮层，不是纯跳转链接)，
+     这里重置一下按钮默认外观，让它跟<a>版本的导航项视觉上完全一样。
+     本轮修复:此前只重置了background/font-family/cursor三项，浏览器给
+     <button>的默认边框(border)、内外边距(margin/padding)、轮廓(outline)
+     没有一起清掉——这些都是<a>标签天生没有、<button>天生有的默认样式，
+     不清掉的话终端按钮看起来还是会比旁边"Wiki百科""流量池明细"两个<a>
+     按钮多一圈边框、位置对不齐，这正是创始人反馈"样式比旁边丑、不统一"
+     的根本原因。这里补齐完整重置。 */
+  button.wiki-entry-link {
+    background: none;
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    border: none;
+    margin: 0;
+    line-height: inherit;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+  button.wiki-entry-link:focus-visible {
+    outline: 1px solid var(--brass-dim);
+    outline-offset: 2px;
+  }
+  .lang-switch { display: flex; align-items: center; }
+  .lang-switch button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--hairline);
+    color: var(--text-muted);
+    padding: 4px 11px;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .lang-switch button:last-child { border-right: none; }
+  .lang-switch button:hover { color: var(--text); }
+  .pool-banner {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 14px;
+    padding: 11px 14px;
+    border-radius: 6px;
+    background: rgba(192, 90, 68, 0.12);
+    border: 1px solid rgba(192, 90, 68, 0.38);
+    color: var(--rust-soft);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .pool-banner.show { display: flex; }
+  .pool-sources-line {
+    margin: -8px 0 14px 2px;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .pool-banner .dot {
+    flex: none;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--rust-soft);
+    animation: dot-breathe 1.6s ease-in-out infinite;
+  }
+  @keyframes dot-breathe {
+    0%, 100% { opacity: 0.55; box-shadow: 0 0 0 2px rgba(192, 90, 68, 0.2); }
+    50% { opacity: 1; box-shadow: 0 0 0 5px rgba(192, 90, 68, 0.12); }
+  }
+  .lang-switch button.active { color: var(--brass-soft); border-bottom: 1px solid var(--brass); }
+  .lang-switch button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+
+  /* ---------- 主体：左文字 / 右仪表景 ---------- */
+  .hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    background: var(--surface);
+    border: 3px solid var(--hairline);
+    border-radius: 6px;
+    box-shadow: 0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
+    overflow: visible;
+  }
+
+  .hero-text {
+    position: relative;
+    padding: 44px 36px 34px 42px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* 左侧铜色书脊条，填补纯色留白 */
+  .hero-text::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0; width: 3px;
+    background: linear-gradient(180deg, transparent, var(--brass-dim) 30%, var(--brass-dim) 70%, transparent);
+  }
+  /* 极淡的罗盘水印，装饰但不干扰阅读 */
+  .compass-mark {
+    position: absolute;
+    right: -30px; bottom: -30px;
+    width: 220px; height: 220px;
+    opacity: 0.06;
+    pointer-events: none;
+  }
+
+  .node-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+
+  .status-line {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 34px;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    position: relative;
+    transition: color 0.4s ease;
+  }
+  body.status-ok .status-line { color: var(--brass-soft); }
+  body.status-down .status-line { color: var(--rust-soft); }
+  body.status-unknown .status-line { color: var(--unknown); }
+
+  .duration-line { color: var(--text-muted); font-size: 14.5px; margin: 0 0 32px; }
+  .duration-line strong { color: var(--text); font-weight: 500; }
+
+  .stat-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px 16px;
+    border-top: 1px solid var(--hairline);
+    padding-top: 22px;
+  }
+  /* 数字滚动容器：数值变化时旧数字往上滑出、新数字滑入，而不是瞬间跳变 */
+  .num-roll {
+    display: inline-block;
+    height: 24px;
+    overflow: hidden;
+    position: relative;
+    vertical-align: top;
+  }
+  .num-roll .slide {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    transition: transform 0.5s cubic-bezier(.2,.8,.2,1);
+  }
+  .stat .label { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .stat .label-detail { font-size: 10px; color: var(--text-muted); opacity: 0.75; margin-top: 1px; }
+
+  /* 发现17 修复：面板连不上时，把统计数字/守望记录整体标记成"可能已过时"，
+     而不是只改一行提示文字、让下面的旧数字看起来像是刚刚发生的一样。 */
+  .stale-banner {
+    display: none;
+    font-size: 12.5px;
+    color: var(--rust-soft, #c97b63);
+    border: 1px dashed var(--rust-soft, #c97b63);
+    border-radius: 6px;
+    padding: 6px 10px;
+    margin: 8px 0 18px;
+  }
+  .stale-banner.show { display: block; }
+  .is-stale { opacity: 0.45; filter: grayscale(0.4); transition: opacity 0.3s, filter 0.3s; }
+
+  /* ---------- 仪表景：签名视觉（信号灯仪表盘，替代原来的灯塔风景插画） ---------- */
+  .hero-scene {
+    position: relative;
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-left: 3px solid var(--hairline);
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    background: radial-gradient(circle at 50% 40%, #241d13 0%, #171f22 55%, #171f22 100%);
+  }
+  .hero-scene svg { width: 100%; height: 100%; display: block; max-width: 320px; max-height: 320px; }
+  .horizon-line { position: absolute; left: 0; right: 0; bottom: 32%; height: 1px; background: var(--hairline); }
+  /* 灯塔仪表盘 v2（UI改版·灯塔）：创始人明确要求去掉光点下方的塔状/钥匙孔剪影，
+     只保留一个纯粹的信号灯光源，外圈改成更繁复的钟表式刻度环+四角包边装饰，
+     方向定稿见 lighthouse-concept-preview.html 概念稿。原来的三段收分石座剪影
+     （.hero-scene::before，呼应"立在石头上"着地感的塔状图形）到此彻底移除。 */
+
+  /* ---------- 转动的齿轮：大小两枚咬合，挪到雷达表盘（.hero-scene）右下角 ----------
+     之前的版本让齿轮圆心卡在整个 NODE 卡片的下边框线上，一半用 clip-path 裁出
+     "模糊+调暗"冒充"在毛玻璃后面"，一半裁出"清晰"冒充"探出面板"——这个裁切法
+     本身就是"毛玻璃转动时穿帮"这个 bug 的根源：clip-path 硬切的那条分界线不会
+     跟着 backdrop-filter 的实际虚化边界走，转起来两半衔接处必然会看出破绽。
+     这版直接放弃这个"以假乱真"的思路，改成结构上更简单也更合理的做法：
+     齿轮完全挪进雷达表盘（.hero-scene）内部——表盘背景本身是不透明的深色渐变，
+     不是毛玻璃，齿轮在这里转动不会跟任何 backdrop-filter 产生冲突，"穿帮"这个
+     问题不是被掩盖，是从结构上不会再发生。大小两枚齿轮中心距离刻意小于两个
+     半径之和，制造"咬合镶嵌"的观感，转速方向相反（大齿轮带小齿轮）。 */
+  .gear-cluster {
+    position: absolute;
+    right: 4px;
+    bottom: 4px;
+    width: 68px;
+    height: 68px;
+    pointer-events: none;
+  }
+  .gear-a, .gear-b {
+    position: absolute;
+    background-repeat: no-repeat;
+    background-size: contain;
+    opacity: 0.5;
+    will-change: transform;
+  }
+  .gear-a {
+    right: 0; bottom: 0;
+    width: 40px; height: 40px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23c8963e' stroke-width='5'%3E%3Ccircle cx='50' cy='50' r='30'/%3E%3Ccircle cx='50' cy='50' r='12'/%3E%3Cg%3E%3Crect x='46' y='2' width='8' height='16'/%3E%3Crect x='46' y='82' width='8' height='16'/%3E%3Crect x='2' y='46' width='16' height='8'/%3E%3Crect x='82' y='46' width='16' height='8'/%3E%3Crect x='46' y='2' width='8' height='16' transform='rotate(45 50 50)'/%3E%3Crect x='46' y='82' width='8' height='16' transform='rotate(45 50 50)'/%3E%3Crect x='2' y='46' width='16' height='8' transform='rotate(45 50 50)'/%3E%3Crect x='82' y='46' width='16' height='8' transform='rotate(45 50 50)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    animation: gear-spin 14s linear infinite;
+  }
+  .gear-b {
+    right: 28px; bottom: 28px;
+    width: 26px; height: 26px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cg fill='none' stroke='%23c8963e' stroke-width='6'%3E%3Ccircle cx='50' cy='50' r='28'/%3E%3Ccircle cx='50' cy='50' r='10'/%3E%3Cg%3E%3Crect x='45' y='0' width='10' height='18'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(60 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(120 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(180 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(240 50 50)'/%3E%3Crect x='45' y='0' width='10' height='18' transform='rotate(300 50 50)'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    animation: gear-spin-rev 9s linear infinite;
+  }
+  @keyframes gear-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  @keyframes gear-spin-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .gear-a, .gear-b { animation: none; }
+  }
+
+  /* 光束 v2（UI改版·灯塔）：原来是单道扇形光束旋转，创始人要求改成"快慢两道扫描光束，
+     类似钟表时针分针叠加"——两条细光束方向相反、速度不同地持续旋转，比单道扇形更有
+     "精密仪表"的感觉，也呼应外圈新增的钟表式刻度环。异常时两道都转得更急促。 */
+  .sweep-slow, .sweep-fast { transform-origin: 150px 150px; opacity: 0; }
+  body.status-ok .sweep-slow { opacity: 1; animation: rotate-beam 8s linear infinite; }
+  body.status-ok .sweep-fast { opacity: 1; animation: rotate-beam-rev 3s linear infinite; }
+  body.status-down .sweep-slow { opacity: 1; animation: rotate-beam 3.4s linear infinite; }
+  body.status-down .sweep-fast { opacity: 1; animation: rotate-beam-rev 1.4s linear infinite; }
+  body.status-unknown .sweep-slow, body.status-unknown .sweep-fast { opacity: 0; animation: none; }
+  @keyframes rotate-beam {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes rotate-beam-rev {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-360deg); }
+  }
+  #beam-shape-slow { stroke: url(#beamLineUnknown); }
+  #beam-shape-fast { stroke: url(#beamLineUnknownDim); }
+  body.status-ok #beam-shape-slow { stroke: url(#beamLineOk); }
+  body.status-ok #beam-shape-fast { stroke: url(#beamLineOkDim); }
+  body.status-down #beam-shape-slow { stroke: url(#beamLineDown); }
+  body.status-down #beam-shape-fast { stroke: url(#beamLineDownDim); }
+
+  /* 刻度环：60 格钟表式细刻度，替代原来只有 4 个十字准星的简朴表盘，
+     体现"繁复"感的同时呼应"像钟"的整体意象；由 JS 生成，见页面底部脚本。 */
+  .gauge-tick { stroke: var(--brass); }
+  .gauge-tick.major { opacity: 0.85; }
+  .gauge-tick.minor { opacity: 0.32; }
+  /* 四角包边：呼应卡片四角已有的 .rivet 铜制包边视觉语言，这里画在表盘内部，
+     加密一层"繁复"感，不是简单挪用而是按表盘尺寸重新画的一套小号版本。 */
+  .gauge-corner { stroke: var(--brass); fill: none; opacity: 0.85; }
+  .gauge-corner-dot { fill: var(--brass); }
+
+  /* 灯芯：呼吸灯式脉动，代替死板圆点。异常时呼吸更急促、颜色切换到暗砖红 */
+  .lamp-halo { fill: url(#lampGlowUnknown); animation: breathe 3.4s ease-in-out infinite; }
+  body.status-ok .lamp-halo { fill: url(#lampGlowOk); animation: breathe 3.4s ease-in-out infinite; }
+  body.status-down .lamp-halo { fill: url(#lampGlowDown); animation: breathe 1.2s ease-in-out infinite; }
+  body.status-unknown .lamp-halo { animation: breathe 4.5s ease-in-out infinite; opacity: 0.45; }
+  @keyframes breathe { 0%, 100% { opacity: 0.5; r: 17px; } 50% { opacity: 1; r: 23px; } }
+
+  .lamp-core { fill: var(--unknown); transition: fill 0.4s ease; }
+  body.status-ok .lamp-core { fill: var(--brass); }
+  body.status-down .lamp-core { fill: var(--rust-soft); }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sweep-slow, .sweep-fast, .lamp-halo {
+      animation: none !important;
+    }
+  }
+
+  /* ---------- 守望记录（事件时间线） ---------- */
+  .log {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 26px 32px 10px;
+  }
+  .log h2 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--text-muted);
+    margin: 0 0 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .log-tz-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-style: normal;
+    font-size: 11px;
+    color: var(--text-faint, var(--text-muted));
+    opacity: 0.7;
+  }
+  .log-item {
+    display: grid;
+    grid-template-columns: 100px 20px 1fr;
+    gap: 0 12px;
+    align-items: baseline;
+    padding: 13px 0;
+    border-top: 1px solid var(--hairline);
+    font-size: 13.5px;
+  }
+  .log-item:first-of-type { border-top: none; }
+  .log-time {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  .log-tick { color: var(--text-muted); text-align: center; }
+  .log-item.type-down .log-tick { color: var(--rust-soft); }
+  .log-item.type-recovered .log-tick { color: var(--brass-soft); }
+  .log-item.type-restart .log-tick, .log-item.type-restart_failed .log-tick { color: var(--teal-soft); }
+  .log-msg { color: var(--text); }
+
+  .empty-log { color: var(--text-muted); font-size: 13.5px; padding: 6px 0 22px; }
+
+  /* ---------- 终端悬浮层（UI改版·容器方式）----------
+     悬浮层本身只提供"边框+关闭按钮"这层外壳，终端页面自己的顶部状态栏/
+     解锁行/输出区/速查表弹窗全部在iframe内部，跟外壳完全独立，互不影响。 */
+  .terminal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .terminal-overlay.open { display: flex; }
+  .terminal-overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(8, 10, 13, 0.72);
+  }
+  .terminal-overlay-panel {
+    position: relative;
+    width: min(920px, 100%);
+    height: min(680px, 100%);
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(232,196,119,0.06);
+    overflow: hidden;
+    display: flex;
+  }
+  .terminal-overlay-frame {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none;
+    background: #0c1214;
+  }
+  .terminal-overlay-close {
+    position: absolute;
+    top: 8px;
+    right: 10px;
+    z-index: 1;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline);
+    background: rgba(12, 18, 20, 0.72);
+    color: var(--text-muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .terminal-overlay-close:hover { color: var(--brass-soft); border-color: var(--brass-dim); }
+  @media (max-width: 640px) {
+    .terminal-overlay { padding: 0; }
+    .terminal-overlay-panel { width: 100%; height: 100%; border-radius: 0; }
+  }
+
+  /* ---------- AI 诊断卡片 ---------- */
+  .ai-card {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 26px 32px 28px;
+  }
+  .ai-card h2 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+  .ai-body { font-size: 13.5px; line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+  .ai-meta { font-size: 12px; color: var(--text-muted); margin-top: 10px; font-family: 'IBM Plex Mono', monospace; }
+  .ai-empty { color: var(--text-muted); font-size: 13.5px; }
+  .ai-error { color: var(--rust-soft); font-size: 13.5px; }
+  .ai-disabled-hint { color: var(--text-muted); font-size: 12.5px; margin-top: 4px; }
+  .ai-actions { margin-top: 16px; }
+  .ai-diagnose-btn {
+    display: none;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    background: transparent;
+    border: 1px solid var(--brass-dim);
+    color: var(--brass);
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .ai-diagnose-btn:hover { border-color: var(--brass); }
+  .ai-diagnose-btn:disabled { opacity: 0.5; cursor: default; }
+  .log-item.type-ai_diagnosis .log-tick { color: var(--teal-soft); }
+  .log-item.type-ai_diagnosis_failed .log-tick { color: var(--rust-soft); }
+  .log-item.type-usability_ok .log-tick { color: var(--teal-soft); }
+  .log-item.type-usability_down .log-tick { color: var(--rust-soft); }
+  .log-item.type-usability_check_error .log-tick { color: var(--brass); }
+  .log-item.type-usability_restart_suggested .log-tick { color: var(--brass); }
+  .log-item.type-usability_auto_restart .log-tick { color: var(--teal-soft); }
+  .log-item.type-kb_sync_applied .log-tick { color: var(--teal-soft); }
+  .log-item.type-wiki_sync_applied .log-tick { color: var(--teal-soft); }
+
+  /* ---------- 内容同步卡片(本轮新增:知识库/Wiki远程同步的面板入口) ---------- */
+  .sync-card {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 26px 32px 28px;
+  }
+  .sync-card h2 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+  .sync-section { margin-bottom: 18px; }
+  .sync-section:last-child { margin-bottom: 0; }
+  .sync-section h3 {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 6px;
+  }
+  .sync-status { font-size: 12.5px; color: var(--text-muted); }
+  .sync-result { font-size: 12.5px; color: var(--text); margin-top: 4px; min-height: 1em; }
+  .sync-result.sync-error { color: var(--rust-soft); }
+  .sync-actions { margin-top: 10px; display: flex; gap: 10px; }
+  .sync-btn {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    background: transparent;
+    border: 1px solid var(--brass-dim);
+    color: var(--brass);
+    padding: 7px 14px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .sync-btn:hover { border-color: var(--brass); }
+  .sync-btn:disabled { opacity: 0.5; cursor: default; }
+  .sync-btn-confirm { border-color: var(--teal-soft); color: var(--teal-soft); }
+  .sync-btn-confirm:hover { border-color: var(--teal); }
+
+  /* ---------- 订阅信息卡片（批次二新增） ---------- */
+  .sub-card {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 26px 32px 28px;
+  }
+  .sub-card h2 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--text-muted);
+    margin: 0 0 6px;
+  }
+  .sub-lead { font-size: 13px; color: var(--text-muted); margin: 0 0 20px; line-height: 1.6; }
+  .sub-item { padding: 18px 0; border-top: 1px solid var(--hairline); }
+  .sub-item:first-of-type { padding-top: 0; border-top: none; }
+  .sub-item-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .sub-item-label { font-size: 13.5px; color: var(--text); font-weight: 500; }
+  .sub-item-badge {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--brass);
+    border: 1px solid var(--brass-dim);
+    border-radius: 3px;
+    padding: 1px 6px;
+  }
+  .sub-item-body { display: flex; align-items: center; gap: 16px; }
+  .sub-qr {
+    flex: none;
+    width: 96px; height: 96px;
+    background: #fff;
+    border-radius: 4px;
+    padding: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .sub-qr img, .sub-qr canvas { display: block; width: 100%; height: 100%; }
+  .sub-url-block { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+  .sub-url {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 8px 10px;
+    word-break: break-all;
+    display: block;
+  }
+  .sub-copy-btn {
+    align-self: flex-start;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    background: transparent;
+    border: 1px solid var(--brass-dim);
+    color: var(--brass);
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .sub-copy-btn:hover { border-color: var(--brass); }
+  .sub-hint { font-size: 12px; color: var(--text-muted); margin: 10px 0 0; line-height: 1.6; }
+  .sub-empty-hint {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    background: var(--surface-2);
+    border: 1px dashed var(--hairline);
+    border-radius: 4px;
+    padding: 12px 14px;
+    line-height: 1.6;
+  }
+
+  /* ---------- 守望星图（流量池来源可视化，批次三第三步） ---------- */
+  /* 只在流量池启用且拿到至少一颗星时显示，卡片外壳跟 ai-card/sub-card 同一套视觉规范。 */
+  .starmap-card {
+    margin-top: 22px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .starmap-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    padding: 26px 32px 14px;
+  }
+  .starmap-head h2 {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: 16px;
+    color: var(--text-muted);
+    margin: 0;
+  }
+  .starmap-tally {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .starmap-tally b { color: var(--teal-soft); font-weight: 500; }
+  .starmap-tally .trial-count { color: var(--brass-soft); }
+
+  .starmap-grid { display: grid; grid-template-columns: 1.3fr 1fr; }
+
+  .starmap-chart {
+    position: relative;
+    min-height: 280px;
+    border-top: 1px solid var(--hairline);
+    border-right: 1px solid var(--hairline);
+    background: radial-gradient(ellipse at 40% 30%, #16211f 0%, #101617 70%);
+  }
+  .starmap-chart svg { width: 100%; height: 280px; display: block; }
+
+  .star-halo { animation: sm-twinkle 4.5s ease-in-out infinite; }
+  .star.tier-established { fill: var(--teal-soft); }
+  .star.tier-trial { fill: var(--text); opacity: 0.55; }
+  @keyframes sm-twinkle { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.85; } }
+  @keyframes sm-ring-pulse { 0% { opacity: 0.9; r: 6; } 100% { opacity: 0; r: 20; } }
+
+  .starmap-harbor-mark { fill: var(--brass-dim); }
+  .starmap-harbor-label { font-family: 'IBM Plex Mono', monospace; font-size: 9.5px; fill: var(--text-muted); }
+  .starmap-overflow-note { font-family: 'IBM Plex Mono', monospace; font-size: 9px; fill: var(--text-muted); opacity: 0.75; }
+  .starmap-route { fill: none; stroke: var(--brass-soft); stroke-width: 1.2; stroke-linecap: round; stroke-dasharray: 4 3; animation: sm-route-draw 1.6s ease forwards; }
+  @keyframes sm-route-draw { from { stroke-dashoffset: 60; opacity: 0; } to { stroke-dashoffset: 0; opacity: 0.85; } }
+
+  .starmap-caption {
+    padding: 10px 20px 16px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: 1px solid var(--hairline);
+  }
+  .starmap-caption span { display: inline-flex; align-items: center; gap: 6px; }
+  .starmap-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+  .starmap-empty {
+    padding: 36px 32px 40px;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    border-top: 1px solid var(--hairline);
+  }
+
+  .starmap-roster { padding: 22px 26px 24px; border-top: 1px solid var(--hairline); }
+  .starmap-roster h3 {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 0 0 12px;
+    text-transform: uppercase;
+  }
+  .starmap-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 9px 0;
+    border-top: 1px solid var(--hairline);
+    font-size: 12.5px;
+  }
+  .starmap-row:first-of-type { border-top: none; }
+  .starmap-flag { font-size: 14px; }
+  .starmap-source { min-width: 0; overflow-wrap: break-word; }
+  .starmap-source-stat { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; color: var(--text-muted); margin-top: 2px; }
+  .starmap-tier-tag { font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; text-align: right; white-space: nowrap; }
+  .starmap-tier-tag.established { color: var(--teal-soft); }
+  .starmap-tier-tag.trial { color: var(--brass-soft); }
+  .starmap-tier-tag.blacklisted { color: var(--rust-soft); opacity: 0.65; text-decoration: line-through; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .star-halo, .starmap-route { animation: none !important; }
+  }
+
+  /* ---------- 底部 ---------- */
+  .footer {
+    margin-top: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .check-btn {
+    background: transparent;
+    border: 1px solid var(--brass-dim);
+    color: var(--brass);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12.5px;
+    padding: 10px 18px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+    white-space: nowrap;
+  }
+  .check-btn:hover { border-color: var(--brass); }
+  .check-btn:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+  .check-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .footer-actions { display: flex; align-items: center; gap: 12px; }
+  .logout-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    padding: 0;
+  }
+  .logout-btn:hover { color: var(--text); }
+
+  /* ---------- 毛玻璃基础质感（五个模块共用）+ 每个模块各自不同的边框风格 ----------
+     上一版四个角用一张背景图拼出 L 形边角，在 Safari 上右侧两个角只显示了铆钉圆点、
+     线条没画出来——那套"一个属性里塞五层背景图、每层各自不同位置"的写法太绕，
+     Safari 对这种多层 background-position 的兼容性明显不如 Chrome，这次直接换成
+     最基础、最不会出兼容问题的写法：border / box-shadow，每个模块单独给一种风格。 */
+  .hero, .log, .ai-card, .sub-card, .starmap-card {
+    position: relative;
+    background-color: var(--surface-glass);
+    backdrop-filter: blur(16px) saturate(1.15);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    transition: box-shadow 0.25s ease;
+  }
+  .hero:hover, .log:hover, .ai-card:hover, .sub-card:hover, .starmap-card:hover {
+    box-shadow: 0 0 0 1px var(--relic-glow), 0 0 22px -6px var(--relic-glow);
+  }
+  /* 不支持 backdrop-filter 的极少数环境下，退回不透明底色，保证可读性 */
+  @supports not (backdrop-filter: blur(1px)) {
+    .hero, .log, .ai-card, .sub-card, .starmap-card { background-color: var(--surface); }
+  }
+
+  /* NODE 信号灯模块——旗舰位置，用四个真实的铜制边角构件（border 画的 L 形 + 圆铆钉），
+     不再依赖背景图拼接，四个角保证完全对称、哪个浏览器都一样。 */
+  .rivet {
+    position: absolute;
+    z-index: 2;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+  }
+  .rivet::before {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--brass);
+    box-shadow: 0 0 4px var(--relic-glow);
+  }
+  .rivet.tl { top: 10px; left: 10px; border-top: 1.4px solid var(--brass); border-left: 1.4px solid var(--brass); }
+  .rivet.tl::before { top: -2.5px; left: -2.5px; }
+  .rivet.tr { top: 10px; right: 10px; border-top: 1.4px solid var(--brass); border-right: 1.4px solid var(--brass); }
+  .rivet.tr::before { top: -2.5px; right: -2.5px; }
+  .rivet.bl { bottom: 10px; left: 10px; border-bottom: 1.4px solid var(--brass); border-left: 1.4px solid var(--brass); }
+  .rivet.bl::before { bottom: -2.5px; left: -2.5px; }
+  .rivet.br { bottom: 10px; right: 10px; border-bottom: 1.4px solid var(--brass); border-right: 1.4px solid var(--brass); }
+  .rivet.br::before { bottom: -2.5px; right: -2.5px; }
+
+  /* 日志时间线模块——账本/记事簿的感觉：顶部一道粗铜线当"书脊"，其余三边细线 */
+  .log {
+    border: 3px solid var(--hairline);
+    border-top: 3px solid var(--brass);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
+  }
+
+  /* AI 诊断模块——技术图纸感：虚线边框，像电路图/工程图纸的框线 */
+  .ai-card {
+    border: 2px dashed var(--brass-dim);
+  }
+
+  /* 订阅信息模块——最常被操作的模块，双线"铭牌"边框，内嵌一圈细线强调它的重要性 */
+  .sub-card {
+    border: 3px solid var(--hairline);
+    box-shadow: inset 0 0 0 4px rgba(200, 150, 62, 0.05), inset 0 0 0 5px var(--brass-dim),
+      0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
+  }
+
+  /* 星图/来源模块——星图仪的玻璃穹顶感：无硬边框，只有一圈内发光 */
+  .starmap-card {
+    border: 3px solid var(--hairline);
+    box-shadow: inset 0 0 20px -8px var(--relic-glow),
+      0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
+  }
+
+
+  /* ---------- 模块标题：希腊回纹（meander）细线替代普通下划线 ----------
+     体现"亚历山大灯塔"所在的古代地中海建筑语汇，线条极细，只作点缀。 */
+  .log h2, .ai-card h2, .sub-card h2, .starmap-head h2 {
+    display: inline-block;
+    padding-bottom: 8px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6'%3E%3Cpath d='M0 5 H4 V1 H8 V5 H12 V1 H16' fill='none' stroke='%237d6534' stroke-width='1'/%3E%3C/svg%3E");
+    background-repeat: repeat-x;
+    background-position: left bottom;
+    background-size: 16px 6px;
+  }
+
+  @media (max-width: 760px) {
+    .hero { grid-template-columns: 1fr; }
+    .hero-scene { min-height: 220px; order: -1; border-left: none; border-bottom: 1px solid var(--hairline); }
+    .hero-text { padding: 30px 24px 28px; }
+    .status-line { font-size: 27px; }
+    .log { padding: 22px 20px 6px; }
+    .log-item { grid-template-columns: 78px 16px 1fr; font-size: 13px; }
+    .footer { flex-direction: column; align-items: flex-start; gap: 14px; }
+    .footer-actions { width: 100%; flex-direction: column-reverse; align-items: stretch; gap: 10px; }
+    .check-btn { min-height: 44px; }
+    .logout-btn { align-self: center; padding: 8px 0; }
+    .lang-switch button { min-width: 28px; padding: 4px 8px; }
+    .topbar { flex-wrap: wrap; gap: 12px; }
+    /* 窄屏（手机浏览器打开面板）：星图和名册从左右两栏改成上下堆叠，
+       星图区域的边框相应从"右边框"改成"下边框"，避免中间悬空一条竖线。 */
+    .starmap-grid { grid-template-columns: 1fr; }
+    .starmap-chart, .starmap-caption { border-right: none; border-bottom: 1px solid var(--hairline); }
+    .starmap-head { padding: 22px 20px 12px; }
+    .starmap-roster { padding: 18px 20px 20px; }
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 24px 14px 70px; }
+    .hero { border-radius: 6px; }
+    .hero-scene { min-height: 170px; }
+    .hero-scene svg { max-width: 220px; max-height: 220px; }
+    .hero-text { padding: 24px 18px 22px; }
+    .compass-mark { width: 160px; height: 160px; }
+    .node-label { font-size: 11px; }
+    .status-line { font-size: 23px; }
+    .duration-line { font-size: 13px; margin-bottom: 24px; }
+    .stat-grid { gap: 16px 12px; padding-top: 18px; }
+    .num-roll .slide { font-size: 17px; }
+    .log { border-radius: 6px; padding: 18px 16px 4px; }
+    .log-item { grid-template-columns: 66px 14px 1fr; font-size: 12.5px; padding: 11px 0; }
+    .brand-word { font-size: 16px; }
+    .starmap-chart svg { height: 230px; }
+    .starmap-chart { min-height: 230px; }
+    .starmap-tally { font-size: 11px; }
+    .starmap-row { grid-template-columns: 18px 1fr auto; font-size: 12px; }
+  }
+</style>
+</head>
+<body class="status-unknown">
+  <div class="page">
+
+    <div class="topbar">
+      <div class="brand">
+        <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <path d="M14.5 3 L17.5 3 L19 10 L13 10 Z" fill="var(--brass)"/>
+          <path d="M13.3 10.5 H18.7 L20.5 24 H11.5 Z" fill="none" stroke="var(--text-muted)" stroke-width="1.1"/>
+          <line x1="12.2" y1="15" x2="19.8" y2="15" stroke="var(--text-muted)" stroke-width="1"/>
+          <line x1="11.8" y1="19.5" x2="20.2" y2="19.5" stroke="var(--text-muted)" stroke-width="1"/>
+          <line x1="6" y1="24" x2="26" y2="24" stroke="var(--text-muted)" stroke-width="1.2"/>
+        </svg>
+        <span class="brand-word">NodeNanny</span>
+      </div>
+      <div class="topbar-nav">
+        <a class="wiki-entry-link" href="/wiki.html">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M8 3.4C6.7 2.6 5 2.3 3 2.3v9.4c2 0 3.7.3 5 1.1 1.3-.8 3-1.1 5-1.1V2.3c-2 0-3.7.3-5 1.1Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+            <path d="M8 3.4v9.4" stroke="currentColor" stroke-width="1.1"/>
+          </svg>
+          <span id="wiki-nav-label">Wiki百科</span>
+        </a>
+        <a class="wiki-entry-link" href="/pool-events.html" id="pool-events-nav-link">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <path d="M2 13.5 H14" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            <rect x="3.4" y="8.6" width="2.6" height="4.9" rx="0.4" fill="currentColor" opacity="0.85"/>
+            <rect x="7" y="5.4" width="2.6" height="8.1" rx="0.4" fill="currentColor" opacity="0.85"/>
+            <rect x="10.6" y="2.6" width="2.6" height="10.9" rx="0.4" fill="currentColor" opacity="0.85"/>
+          </svg>
+          <span id="pool-events-nav-label"></span>
+        </a>
+        <!-- 终端入口 v2（UI改版·容器方式）：不再直接跳转到独立页面，改成从主面板
+             唤起一个悬浮层（内部用iframe加载/terminal.html），主面板本身不跳走，
+             跟星图/流量池明细这类"独立页面"的处理方式刻意区分开——见交接文档
+             "B方案+C方案结合"的决策。terminal.html本身仍然可以被直接访问到。 -->
+        <button type="button" class="wiki-entry-link" id="terminal-launch-btn">
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect x="1.5" y="2.5" width="13" height="11" rx="1.4" stroke="currentColor" stroke-width="1.1"/>
+            <path d="M4 6.2 L6.6 8 L4 9.8" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 9.8 H11" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+          <span id="terminal-launch-label"></span>
+        </button>
+        <div class="lang-switch" id="lang-switch" role="group" aria-label="Language"></div>
+      </div>
+    </div>
+
+    <div class="pool-banner" id="pool-banner">
+      <span class="dot" aria-hidden="true"></span>
+      <span id="pool-banner-text"></span>
+    </div>
+    <div class="pool-sources-line" id="pool-sources-line" style="display:none;"></div>
+    <div class="pool-sources-line" id="pool-active-nodes-line" style="display:none;"></div>
+
+    <div class="hero">
+      <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+      <div class="hero-text">
+        <svg class="compass-mark" viewBox="0 0 200 200" aria-hidden="true">
+          <circle cx="100" cy="100" r="90" fill="none" stroke="var(--brass)" stroke-width="0.6"/>
+          <circle cx="100" cy="100" r="60" fill="none" stroke="var(--brass)" stroke-width="0.6"/>
+          <line x1="100" y1="6" x2="100" y2="194" stroke="var(--brass)" stroke-width="0.6"/>
+          <line x1="6" y1="100" x2="194" y2="100" stroke="var(--brass)" stroke-width="0.6"/>
+          <line x1="27" y1="27" x2="173" y2="173" stroke="var(--brass)" stroke-width="0.4"/>
+          <line x1="173" y1="27" x2="27" y2="173" stroke="var(--brass)" stroke-width="0.4"/>
+        </svg>
+        <p class="node-label" id="node-label">···</p>
+        <p class="status-line" id="status-line">···</p>
+        <p class="duration-line" id="duration-line"></p>
+        <p class="stale-banner" id="stale-banner"></p>
+
+        <div class="stat-grid">
+          <div class="stat">
+            <div class="num-roll" id="stat-restarts"><span class="slide">—</span></div>
+            <div class="label" id="label-restarts"></div>
+            <div class="label-detail" id="label-restarts-detail"></div>
+          </div>
+          <div class="stat">
+            <div class="num-roll" id="stat-lastcheck"><span class="slide">—</span></div>
+            <div class="label" id="label-lastcheck"></div>
+          </div>
+          <div class="stat" style="grid-column: 1 / -1;">
+            <div class="num-roll" id="stat-interval"><span class="slide">—</span></div>
+            <div class="label" id="label-interval"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-scene">
+        <div class="horizon-line"></div>
+        <svg viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true">
+          <defs>
+            <radialGradient id="lampGlowOk" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--brass-soft)" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="var(--brass-soft)" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="lampGlowDown" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--rust-soft)" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="var(--rust-soft)" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="lampGlowUnknown" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--unknown)" stop-opacity="0.7"/>
+              <stop offset="100%" stop-color="var(--unknown)" stop-opacity="0"/>
+            </radialGradient>
+            <!-- filterUnits 显式指定为 userSpaceOnUse：光束是一条 x1=x2 的垂直线，
+                 包围盒宽度为 0，若用默认的 objectBoundingBox 百分比坐标，滤镜区域宽度
+                 会被计算成 0 * 220% = 0，导致整条光束连同模糊效果被裁剪到完全不可见——
+                 这就是"完全没有光束"这个问题的真正根因，跟状态/颜色/动画都无关。
+                 换成绝对坐标(覆盖整个 300x300 viewBox 并留出模糊余量)后不再有这个塌缩问题。 -->
+            <filter id="beam-soften" filterUnits="userSpaceOnUse" x="-20" y="-20" width="340" height="340">
+              <feGaussianBlur stdDeviation="3.2"/>
+            </filter>
+            <filter id="lamp-soften" x="-200%" y="-200%" width="500%" height="500%">
+              <feGaussianBlur stdDeviation="6"/>
+            </filter>
+
+            <!-- 光束 v2 用的线性渐变：近灯芯不透明、远端透明，画在一条细线上，
+                 比原来的锥形扇区更像"扫描光束"而不是探照灯。慢/快两道各配一条主色+一条暗色，
+                 呼应概念稿里 beam-slow（亮金）/ beam-fast（暗铜）的层次区分。 -->
+            <linearGradient id="beamLineOk" x1="150" y1="150" x2="150" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--brass-soft)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--brass-soft)" stop-opacity="0.6"/>
+            </linearGradient>
+            <linearGradient id="beamLineOkDim" x1="150" y1="150" x2="150" y2="55" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--brass)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--brass)" stop-opacity="0.42"/>
+            </linearGradient>
+            <linearGradient id="beamLineDown" x1="150" y1="150" x2="150" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--rust-soft)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--rust-soft)" stop-opacity="0.6"/>
+            </linearGradient>
+            <linearGradient id="beamLineDownDim" x1="150" y1="150" x2="150" y2="55" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--rust)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--rust)" stop-opacity="0.42"/>
+            </linearGradient>
+            <linearGradient id="beamLineUnknown" x1="150" y1="150" x2="150" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--unknown)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--unknown)" stop-opacity="0.5"/>
+            </linearGradient>
+            <linearGradient id="beamLineUnknownDim" x1="150" y1="150" x2="150" y2="55" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--unknown)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--unknown)" stop-opacity="0.35"/>
+            </linearGradient>
+          </defs>
+
+          <!-- 刻度盘 v2（UI改版·灯塔）：原来只有两圈素圆环+4个十字准星，创始人要求外圈加
+               繁复的美术装饰，改成 60 格钟表式细刻度（每 5 格加粗，呼应分钟刻度感）+
+               四角包边装饰，方向定稿见 lighthouse-concept-preview.html。刻度本身由页面
+               底部脚本 renderGaugeTicks() 生成并插入 #gauge-ticks 分组。 -->
+          <circle cx="150" cy="150" r="128" fill="none" stroke="var(--hairline)" stroke-width="1"/>
+          <circle cx="150" cy="150" r="112" fill="none" stroke="var(--brass-dim)" stroke-width="0.8"/>
+          <g id="gauge-ticks" aria-hidden="true"></g>
+
+          <!-- 四角包边：呼应卡片四角 .rivet 铜制包边视觉语言的小号 SVG 版本 -->
+          <g class="gauge-corner-group" aria-hidden="true">
+            <g class="gauge-corner">
+              <path d="M 40 60 L 40 34 L 66 34"/>
+              <circle class="gauge-corner-dot" cx="40" cy="34" r="2.2"/>
+            </g>
+            <g class="gauge-corner">
+              <path d="M 260 60 L 260 34 L 234 34"/>
+              <circle class="gauge-corner-dot" cx="260" cy="34" r="2.2"/>
+            </g>
+            <g class="gauge-corner">
+              <path d="M 40 240 L 40 266 L 66 266"/>
+              <circle class="gauge-corner-dot" cx="40" cy="266" r="2.2"/>
+            </g>
+            <g class="gauge-corner">
+              <path d="M 260 240 L 260 266 L 234 266"/>
+              <circle class="gauge-corner-dot" cx="260" cy="266" r="2.2"/>
+            </g>
+          </g>
+
+          <!-- 光束 v2：快慢两道扫描光束，类似钟表时针/分针叠加旋转，取代原来单道扇形光束
+               （唯一的核心动效之一）。慢的那道更长更亮，快的那道更短更暗，制造层次感。 -->
+          <g class="sweep-slow" filter="url(#beam-soften)">
+            <line id="beam-shape-slow" x1="150" y1="150" x2="150" y2="22" stroke-width="9" stroke-linecap="round"/>
+          </g>
+          <g class="sweep-fast" filter="url(#beam-soften)">
+            <line id="beam-shape-fast" x1="150" y1="150" x2="150" y2="55" stroke-width="5" stroke-linecap="round"/>
+          </g>
+
+          <!-- 灯芯：呼吸灯式脉动（唯一的核心动效之二），代替死板圆点。去掉了下方的
+               塔状/钥匙孔剪影，这里只保留一个纯粹的光源。 -->
+          <circle class="lamp-halo" cx="150" cy="150" r="22" filter="url(#lamp-soften)"/>
+          <circle class="lamp-core" cx="150" cy="150" r="6.5"/>
+        </svg>
+        <div class="gear-cluster" aria-hidden="true">
+          <div class="gear-a"></div>
+          <div class="gear-b"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-card" id="sub-card">
+      <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+      <h2 id="sub-title"></h2>
+      <p class="sub-lead" id="sub-lead"></p>
+
+      <div class="sub-item">
+        <div class="sub-item-head">
+          <span class="sub-item-label" id="sub-label-nanny"></span>
+          <span class="sub-item-badge" id="sub-badge-recommend"></span>
+        </div>
+        <div class="sub-item-body">
+          <div class="sub-qr" id="sub-qr-nanny"></div>
+          <div class="sub-url-block">
+            <code class="sub-url" id="sub-url-nanny">···</code>
+            <button class="sub-copy-btn" data-target="sub-url-nanny" id="sub-copy-nanny"></button>
+          </div>
+        </div>
+        <p class="sub-hint" id="sub-hint-nanny"></p>
+        <p class="sub-empty-hint" id="sub-warning-nanny" style="display:none;"></p>
+      </div>
+
+      <div class="sub-item">
+        <div class="sub-item-head">
+          <span class="sub-item-label" id="sub-label-node"></span>
+        </div>
+        <div class="sub-item-body" id="sub-node-body">
+          <div class="sub-qr" id="sub-qr-node"></div>
+          <div class="sub-url-block">
+            <code class="sub-url" id="sub-url-node">···</code>
+            <button class="sub-copy-btn" data-target="sub-url-node" id="sub-copy-node"></button>
+          </div>
+        </div>
+        <p class="sub-hint" id="sub-hint-node"></p>
+        <p class="sub-empty-hint" id="sub-empty-node" style="display:none;"></p>
+      </div>
+    </div>
+
+    <div class="starmap-card" id="starmap-card" style="display:none;">
+      <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+      <div class="starmap-head">
+        <h2 id="starmap-title"></h2>
+        <div class="starmap-tally" id="starmap-tally"></div>
+      </div>
+      <div class="starmap-grid">
+        <div>
+          <div class="starmap-chart">
+            <svg viewBox="0 0 420 320" id="starmap-svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true"></svg>
+          </div>
+          <div class="starmap-caption">
+            <span><i class="starmap-dot" style="background:var(--teal-soft)"></i><span id="starmap-legend-established"></span></span>
+            <span><i class="starmap-dot" style="background:var(--text);opacity:.6"></i><span id="starmap-legend-trial"></span></span>
+            <span><i class="starmap-dot" style="background:var(--rust);opacity:.5"></i><span id="starmap-legend-blacklisted"></span></span>
+          </div>
+        </div>
+        <div class="starmap-roster" id="starmap-roster">
+          <h3 id="starmap-roster-title"></h3>
+          <div id="starmap-roster-list"></div>
+        </div>
+      </div>
+      <div class="starmap-empty" id="starmap-empty" style="display:none;"></div>
+    </div>
+
+    <div class="log">
+      <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+      <h2 id="log-title"><span id="log-title-text"></span><span class="log-tz-label" id="log-tz-label"></span></h2>
+      <div id="log-list"></div>
+    </div>
+
+    <div class="ai-card">
+      <h2 id="ai-title"></h2>
+      <div id="ai-content"></div>
+      <div class="ai-actions">
+        <button class="ai-diagnose-btn" id="ai-diagnose-btn"></button>
+      </div>
+    </div>
+
+    <div class="sync-card">
+      <h2 id="sync-title"></h2>
+
+      <div class="sync-section">
+        <h3 id="sync-kb-title"></h3>
+        <div class="sync-status" id="sync-kb-status"></div>
+        <div class="sync-result" id="sync-kb-result"></div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="sync-kb-check-btn"></button>
+          <button class="sync-btn sync-btn-confirm" id="sync-kb-apply-btn" style="display:none;"></button>
+        </div>
+      </div>
+
+      <div class="sync-section">
+        <h3 id="sync-wiki-title"></h3>
+        <div class="sync-status" id="sync-wiki-status"></div>
+        <div class="sync-result" id="sync-wiki-result"></div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="sync-wiki-check-btn"></button>
+          <button class="sync-btn sync-btn-confirm" id="sync-wiki-apply-btn" style="display:none;"></button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sync-card">
+      <h2 id="report-title"></h2>
+      <div class="sync-section">
+        <div class="sync-status" id="report-hint"></div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="report-generate-btn"></button>
+          <button class="sync-btn sync-btn-confirm" id="report-copy-btn" style="display:none;"></button>
+        </div>
+        <textarea
+          id="report-textarea"
+          readonly
+          style="display:none; width:100%; box-sizing:border-box; margin-top:12px; min-height:220px;
+                 font-family:'IBM Plex Mono', monospace; font-size:12px; line-height:1.6;
+                 background:var(--bg); color:var(--text); border:1px solid var(--hairline);
+                 border-radius:4px; padding:12px; resize:vertical;"
+        ></textarea>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span id="footer-note"></span>
+      <div class="footer-actions">
+        <button class="logout-btn" id="logout-btn"></button>
+        <button class="check-btn" id="check-btn"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 终端悬浮层容器（UI改版·容器方式）：主面板不跳走，点击顶部"终端"按钮时
+       才把/terminal.html加载进这个iframe；关闭时把iframe.src重置为about:blank，
+       这样WebSocket连接会随iframe内容卸载一起干净断开，不会挂在后台。 -->
+  <div class="terminal-overlay" id="terminal-overlay" aria-hidden="true">
+    <div class="terminal-overlay-backdrop" id="terminal-overlay-backdrop"></div>
+    <div class="terminal-overlay-panel" role="dialog" aria-modal="true">
+      <button type="button" class="terminal-overlay-close" id="terminal-overlay-close" aria-label="Close">&times;</button>
+      <iframe class="terminal-overlay-frame" id="terminal-overlay-frame" title="NodeNanny Terminal"></iframe>
+    </div>
+  </div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+/* ---------- 多语言词典 ---------- */
+// v34本轮新增:usability_down/usability_check_error/usability_restart_suggested这三种
+// (v36又加了usability_auto_restart一种，做法一样)事件现在后端写入时就自动附带了
+// 知识库匹配结果(params.kb，见checker.js的matchKbForEvent)，
+// 这里统一拼成一段追加文字，按当前界面语言取explanation，缺失回退英文。之前这几种事件
+// 只有写死的翻译文本，没有真正查过知识库——这个函数就是补上"自动展示知识库建议"这一步，
+// 五个语言的事件渲染函数都调用同一份，不用各自重复实现。
+function kbSuggestionSuffix(kb) {
+  if (!Array.isArray(kb) || kb.length === 0) return '';
+  const texts = kb
+    .map((h) => (h.explanation && (h.explanation[lang] || h.explanation.en)) || '')
+    .filter(Boolean);
+  if (texts.length === 0) return '';
+  return '\n' + texts.join('\n');
+}
+
+const I18N = {
+  zh: {
+    code: '中',
+    timeZone: 'Asia/Shanghai',
+    tzLabel: '北京时间',
+    nodeWaiting: '正在连接节点…',
+    status: { ok: '安好', down: '异常，正在处理', unknown: '等待第一次检测' },
+    durationOk: (d,h,m) => d>0 ? `已持续 ${d} 天 ${h} 小时` : h>0 ? `已持续 ${h} 小时 ${m} 分钟` : `已持续 ${m} 分钟`,
+    durationWaiting: '正在等待第一次检测结果',
+    labelRestarts: '今日自动重启',
+    labelRestartsDetail: (success, attempts) => attempts > 0 ? `其中成功 ${success} 次、失败 ${attempts - success} 次` : '',
+    labelLastcheck: '最近一次检测',
+    labelInterval: (n) => `每 ${n} 分钟检测一次`,
+    navWikiLabel: 'Wiki百科',
+    navPoolEventsLabel: '流量池明细',
+    navTerminalLabel: '终端',
+    logTitle: '守望记录',
+    emptyLog: '还没有记录，一切安静。',
+    footerNote: 'NodeNanny 在后台持续看着，你不用做任何事',
+    logout: '退出登录',
+    checkBtn: '立即检测',
+    checkingBtn: '检测中…',
+    connError: '暂时连不上面板服务（不代表节点异常，可能是网络暂时中断，也可能是面板进程本身出了问题）',
+    dataStale: '连不上面板服务，以下数字可能已经过时，不代表当前真实状态',
+    poolBanner: '正在使用流量池应急节点——这是陌生人的服务器，仅临时使用，自建节点恢复后会自动切回',
+    poolSourcesSummary: (established, trial) => {
+      if (established + trial === 0) return '';
+      const parts = [];
+      if (established > 0) parts.push(`${established} 个长期来源`);
+      if (trial > 0) parts.push(`${trial} 个观察期来源（新发现，还在测试可信度）`);
+      return `流量池节点来自：${parts.join('，')}`;
+    },
+    poolActiveNodesLine: (nodes) => {
+      if (!nodes || nodes.length === 0) return '';
+      const items = nodes.map((n) => {
+        const flag = countryCodeToFlag(n.countryCode) || '';
+        const tierLabel = n.tier === 'trial' ? '试用期来源' : '长期来源';
+        return `${flag ? flag + ' ' : ''}${n.sourceId}（${tierLabel}）`;
+      });
+      return `当前接替的备用节点：${items.join('、')}`;
+    },
+    starmapTitle: '守望星图 · 应急节点',
+    starmapTally: (established, trial, blacklisted) => `长期来源 ${established} · 试用期来源 ${trial} · 已拉黑 ${blacklisted}`,
+    starmapLegendEstablished: '长期来源',
+    starmapLegendTrial: '试用期来源',
+    starmapLegendBlacklisted: '已拉黑',
+    starmapHarborLabel: '你的主节点',
+    starmapOverflowMain: (n) => `另有 ${n} 个观察期来源未在图中显示`,
+    starmapOverflowBlacklist: (n) => `另有 ${n} 个拉黑来源未在图中显示`,
+    starmapRosterTitle: '节点名册',
+    starmapTierEstablished: '长期',
+    starmapTierTrial: '试用期',
+    starmapTierBlacklisted: '已拉黑 · 疑似不可信',
+    starmapStat: (passed, total) => `${passed}/${total} 通过检测`,
+    starmapEmpty: '流量池已开启，但暂时还没有可展示的来源数据——可能是还没跑过第一轮抓取，或者这一轮抓到的候选节点全部没通过检测，都是正常情况，不代表出了故障。',
+    starmapCountryUnknown: '🏳️',
+    aiTitle: 'AI 故障诊断',
+    aiEmpty: '暂无诊断记录。节点连续异常达到设定次数后会自动诊断一次，也可以手动触发。',
+    aiDisabledHint: '未开启 AI 诊断功能，需要在 config.json 里配置 ai.enabled 和你自己的 API Key',
+    aiErrorPrefix: '诊断失败：',
+    aiAt: (t) => `诊断时间：${t}`,
+    aiDiagnoseBtn: '立即诊断',
+    aiDiagnosingBtn: '诊断中…',
+    syncTitle: '内容同步',
+    syncKbTitle: '知识库同步',
+    syncWikiTitle: 'Wiki 百科同步',
+    syncNeverChecked: '还没有检查过',
+    syncCheckBtn: '检查更新',
+    syncCheckingBtn: '检查中…',
+    syncApplyKbBtn: '确认合并',
+    syncApplyWikiBtn: '确认覆盖',
+    syncApplyingBtn: '处理中…',
+    syncNotConfiguredKb: '尚未配置知识库同步来源（config.json 里的 kbSync.rawUrl）',
+    syncNotConfiguredWiki: '尚未配置 Wiki 同步来源（config.json 里的 wikiSync.owner/repo）',
+    syncUpToDateKb: (n) => `已是最新，当前共有 ${n} 条知识库条目`,
+    syncUpToDateWiki: (n) => `已是最新，当前追踪 ${n} 个文件`,
+    syncHasUpdateKb: (a,m,r) => `发现更新：新增 ${a} 条、修改 ${m} 条、删除 ${r} 条，点击下面按钮确认合并`,
+    syncHasUpdateWiki: (a,c,r) => `发现更新：新增 ${a} 个、修改 ${c} 个、删除 ${r} 个文件，点击下面按钮确认覆盖`,
+    syncAppliedKb: (n) => `已合并 ${n} 条内容`,
+    syncAppliedWiki: (dl,rm) => `已覆盖完成：更新 ${dl} 个文件${rm > 0 ? `、删除 ${rm} 个文件` : ''}`,
+    syncErrorPrefix: '同步出错：',
+    syncLastAppliedWiki: (t) => `上次同步：${t}`,
+    reportTitle: '故障报告',
+    reportHint: '把当前状态、最近事件、已尝试的自愈动作、AI诊断结论(如果有)自动整理成一段文字，方便你直接粘贴到论坛帖子里寻求帮助。',
+    reportGenerateBtn: '生成报告',
+    reportGeneratingBtn: '生成中…',
+    reportCopyBtn: '复制',
+    reportCopiedBtn: '已复制',
+    reportErrorPrefix: '生成失败：',
+    subTitle: '订阅信息',
+    subLead: '把下面的订阅地址导入客户端，节点异常时会自动切换到应急节点，恢复后自动切回，你不用手动做任何事。',
+    subLabelNanny: 'NodeNanny 智能订阅',
+    subBadgeRecommend: '推荐使用',
+    subHintNanny: '推荐把这个地址填进客户端的"订阅"功能。平时直接用你自己的节点；自建节点异常且有应急节点可用时，客户端下次刷新订阅会自动切到应急节点，恢复后又会自动切回来。',
+    subLabelNode: '原始节点订阅地址',
+    subHintNode: '这是装机脚本生成的原始订阅地址，只包含你自己的节点，不会自动切换应急节点。仅供备用或核对用，日常请使用上面的智能订阅地址。',
+    subEmptyNode: '还没有检测到原始订阅地址（可能是没有使用一键脚本，或者自动识别没有成功——如果你确认自己用过一键脚本，可以直接去 config.json 手动补上 node.subscriptionUrl）。',
+    subWarnNannyUnusable: '当前还没有可用的真实节点订阅，智能订阅暂时无法使用，请检查 config.json 里的 node.subscriptionUrl。',
+    subCopy: '复制',
+    subCopied: '已复制',
+    events: {
+      down: p => `${p.node} 端口 ${p.port} 无法连接`,
+      recovered: p => p.downMinutes ? `${p.node} 恢复正常，异常持续约 ${p.downMinutes} 分钟` : `${p.node} 恢复正常`,
+      restart: p => `已尝试自动重启服务（${p.serviceName || p.node}）`,
+      restart_failed: p => `自动重启失败：${p.error || '未知错误'}`,
+      pool_activated: p => `已临时切换到流量池应急节点（共 ${p.count || 0} 个备用节点）`,
+      pool_deactivated: p => `自建节点已恢复，已自动切回自建订阅`,
+      pool_refreshed: p => `流量池已刷新，当前 ${p.count || 0} 个备用节点`,
+      pool_refresh_failed: p => `流量池刷新失败：${p.error || '未知错误'}`,
+      pool_unavailable: p => `节点异常，但流量池暂无可用备用节点`,
+      ai_diagnosis: p => `AI 已给出一条故障诊断建议`,
+      ai_diagnosis_failed: p => `AI 诊断调用失败：${p.error || '未知错误'}`,
+      usability_ok: p => `二层可用性检测通过：真的通过代理请求了外部地址，响应正常`,
+      usability_down: p => `二层可用性检测未通过：端口能连上，但代理实际请求外部地址没拿到预期结果，可能是被针对性干扰${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_check_error: p => `二层可用性检测本身出了问题（不代表节点故障）：${p.detail || '未知原因'}${kbSuggestionSuffix(p.kb)}`,
+      usability_restart_suggested: p => `二层可用性检测连续多次未通过——这不会触发自动重启（重启对这类情况大概率没用），仅提醒你人工看一眼${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_auto_restart: p => `二层可用性检测持续异常，NodeNanny 已自动重启一次本地代理${p.restartOk ? '（重启命令执行成功）' : '（重启命令执行失败，需要人工检查）'}${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      kb_sync_applied: p => `知识库远程同步已合并 ${p.count} 条内容`,
+      wiki_sync_applied: p => `Wiki 百科远程同步已应用：更新 ${p.downloaded} 个文件${p.removed > 0 ? `、删除 ${p.removed} 个文件` : ''}`,
+      info: p => p.message || ''
+    }
+  },
+  en: {
+    code: 'EN',
+    timeZone: 'UTC',
+    tzLabel: 'UTC',
+    nodeWaiting: 'Connecting to node…',
+    status: { ok: 'All calm', down: 'Trouble — tending to it', unknown: 'Waiting for first check' },
+    durationOk: (d,h,m) => d>0 ? `Steady for ${d}d ${h}h` : h>0 ? `Steady for ${h}h ${m}m` : `Steady for ${m}m`,
+    durationWaiting: 'Waiting for the first check to come in',
+    labelRestarts: 'Restarts today',
+    labelRestartsDetail: (success, attempts) => attempts > 0 ? `${success} succeeded, ${attempts - success} failed` : '',
+    labelLastcheck: 'Last check',
+    labelInterval: (n) => `Checking every ${n} min`,
+    navWikiLabel: 'Wiki',
+    navPoolEventsLabel: 'Pool details',
+    navTerminalLabel: 'Terminal',
+    logTitle: "Keeper's log",
+    emptyLog: 'Nothing yet — all quiet.',
+    footerNote: 'NodeNanny keeps watch in the background — nothing for you to do',
+    logout: 'Log out',
+    checkBtn: 'Check now',
+    checkingBtn: 'Checking…',
+    connError: "Can't reach the panel service right now (not necessarily a node problem — could be a temporary network hiccup, or an issue with the panel process itself)",
+    dataStale: "Can't reach the panel service — the numbers below may be out of date and may not reflect the current real status",
+    poolBanner: "Running on the backup pool right now — these are strangers' servers, for temporary use only. It'll switch back automatically once your own node recovers.",
+    poolSourcesSummary: (established, trial) => {
+      if (established + trial === 0) return '';
+      const parts = [];
+      if (established > 0) parts.push(`${established} established source(s)`);
+      if (trial > 0) parts.push(`${trial} source(s) still in trial (newly discovered, trust not yet verified)`);
+      return `Backup pool nodes come from: ${parts.join(', ')}`;
+    },
+    poolActiveNodesLine: (nodes) => {
+      if (!nodes || nodes.length === 0) return '';
+      const items = nodes.map((n) => {
+        const flag = countryCodeToFlag(n.countryCode) || '';
+        const tierLabel = n.tier === 'trial' ? 'trial source' : 'established source';
+        return `${flag ? flag + ' ' : ''}${n.sourceId} (${tierLabel})`;
+      });
+      return `Currently standing in: ${items.join(', ')}`;
+    },
+    starmapTitle: 'Starchart · backup nodes',
+    starmapTally: (established, trial, blacklisted) => `${established} established · ${trial} on trial · ${blacklisted} blacklisted`,
+    starmapLegendEstablished: 'Established',
+    starmapLegendTrial: 'On trial',
+    starmapLegendBlacklisted: 'Blacklisted',
+    starmapHarborLabel: 'Your node',
+    starmapOverflowMain: (n) => `${n} more trial source(s) not shown on the chart`,
+    starmapOverflowBlacklist: (n) => `${n} more blacklisted source(s) not shown`,
+    starmapRosterTitle: 'Node roster',
+    starmapTierEstablished: 'Established',
+    starmapTierTrial: 'On trial',
+    starmapTierBlacklisted: 'Blacklisted · suspected untrustworthy',
+    starmapStat: (passed, total) => `${passed}/${total} passed checks`,
+    starmapEmpty: "The backup pool is on, but there's no source data to show yet — either the first fetch hasn't run, or none of this round's candidates passed the checks. Both are normal, not a sign of trouble.",
+    starmapCountryUnknown: '🏳️',
+    aiTitle: 'AI diagnosis',
+    aiEmpty: 'No diagnosis yet. Runs automatically after enough consecutive failures, or trigger it manually.',
+    aiDisabledHint: 'AI diagnosis is off — set ai.enabled and your own API key in config.json to turn it on',
+    aiErrorPrefix: 'Diagnosis failed: ',
+    aiAt: (t) => `Diagnosed at ${t}`,
+    aiDiagnoseBtn: 'Diagnose now',
+    aiDiagnosingBtn: 'Diagnosing…',
+    syncTitle: 'Content Sync',
+    syncKbTitle: 'Knowledge Base Sync',
+    syncWikiTitle: 'Wiki Sync',
+    syncNeverChecked: 'Not checked yet',
+    syncCheckBtn: 'Check for updates',
+    syncCheckingBtn: 'Checking…',
+    syncApplyKbBtn: 'Confirm merge',
+    syncApplyWikiBtn: 'Confirm overwrite',
+    syncApplyingBtn: 'Applying…',
+    syncNotConfiguredKb: 'Knowledge base sync source not configured (kbSync.rawUrl in config.json)',
+    syncNotConfiguredWiki: 'Wiki sync source not configured (wikiSync.owner/repo in config.json)',
+    syncUpToDateKb: (n) => `Up to date — ${n} knowledge base entries`,
+    syncUpToDateWiki: (n) => `Up to date — tracking ${n} files`,
+    syncHasUpdateKb: (a,m,r) => `Update available: ${a} added, ${m} modified, ${r} removed — click below to confirm merge`,
+    syncHasUpdateWiki: (a,c,r) => `Update available: ${a} added, ${c} changed, ${r} removed files — click below to confirm overwrite`,
+    syncAppliedKb: (n) => `Merged ${n} entries`,
+    syncAppliedWiki: (dl,rm) => `Overwrite complete: ${dl} files updated${rm > 0 ? `, ${rm} files removed` : ''}`,
+    syncErrorPrefix: 'Sync error: ',
+    syncLastAppliedWiki: (t) => `Last synced: ${t}`,
+    reportTitle: 'Failure Report',
+    reportHint: 'Automatically assemble current status, recent events, self-healing actions already tried, and the latest AI diagnosis (if any) into text you can paste directly into a forum post.',
+    reportGenerateBtn: 'Generate report',
+    reportGeneratingBtn: 'Generating…',
+    reportCopyBtn: 'Copy',
+    reportCopiedBtn: 'Copied',
+    reportErrorPrefix: 'Failed to generate: ',
+    subTitle: 'Subscription info',
+    subLead: "Import the link below into your client. It switches to a backup node automatically if your own node has trouble, and switches back once it recovers — nothing for you to do.",
+    subLabelNanny: 'NodeNanny smart subscription',
+    subBadgeRecommend: 'Recommended',
+    subHintNanny: "Use this address in your client's \"subscription\" field. It normally points to your own node; if your node is down and a backup is available, the next refresh switches to the backup automatically, then switches back once your node recovers.",
+    subLabelNode: 'Raw node subscription',
+    subHintNode: 'This is the raw subscription address from the install script — just your own node, with no automatic backup switching. Keep it as a fallback or for reference; use the smart subscription above for everyday use.',
+    subEmptyNode: "No raw subscription address detected yet (either the one-click script wasn't used, or auto-detection didn't succeed — if you're sure you used the one-click script, you can add node.subscriptionUrl to config.json by hand).",
+    subWarnNannyUnusable: "There's no working node subscription yet, so the smart subscription can't be used right now — check node.subscriptionUrl in config.json.",
+    subCopy: 'Copy',
+    subCopied: 'Copied',
+    events: {
+      down: p => `${p.node} lost its connection on port ${p.port}`,
+      recovered: p => p.downMinutes ? `${p.node} is back — was out for about ${p.downMinutes} min` : `${p.node} is back`,
+      restart: p => `Attempted an automatic restart (${p.serviceName || p.node})`,
+      restart_failed: p => `Automatic restart failed: ${p.error || 'unknown error'}`,
+      pool_activated: p => `Switched to the backup pool temporarily (${p.count || 0} nodes available)`,
+      pool_deactivated: p => `Your node is back — switched back to your own subscription`,
+      pool_refreshed: p => `Backup pool refreshed — ${p.count || 0} nodes now available`,
+      pool_refresh_failed: p => `Backup pool refresh failed: ${p.error || 'unknown error'}`,
+      pool_unavailable: p => `Node is down and no backup nodes are available yet`,
+      ai_diagnosis: p => `AI provided a diagnosis suggestion`,
+      ai_diagnosis_failed: p => `AI diagnosis call failed: ${p.error || 'unknown error'}`,
+      usability_ok: p => `Layer-2 usability check passed: a real request through the proxy got a normal response`,
+      usability_down: p => `Layer-2 usability check failed: the port is open, but a real request through the proxy didn't get the expected result — possibly targeted interference${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_check_error: p => `The layer-2 usability check itself had a problem (not necessarily a node failure): ${p.detail || 'unknown reason'}${kbSuggestionSuffix(p.kb)}`,
+      usability_restart_suggested: p => `Layer-2 usability check has failed repeatedly — this will not trigger an automatic restart (unlikely to help for this kind of issue), just a heads-up to take a manual look${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_auto_restart: p => `Layer-2 usability check has been persistently failing — NodeNanny automatically restarted the local proxy once${p.restartOk ? ' (restart command succeeded)' : ' (restart command failed, manual check needed)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      kb_sync_applied: p => `Knowledge base sync merged ${p.count} ${p.count === 1 ? 'entry' : 'entries'}`,
+      wiki_sync_applied: p => `Wiki sync applied: ${p.downloaded} file${p.downloaded === 1 ? '' : 's'} updated${p.removed > 0 ? `, ${p.removed} removed` : ''}`,
+      info: p => p.message || ''
+    }
+  },
+  ja: {
+    code: '日',
+    timeZone: 'Asia/Tokyo',
+    tzLabel: '東京時間',
+    nodeWaiting: 'ノードに接続中…',
+    status: { ok: '平穏', down: '異常、対応中', unknown: '初回検査待ち' },
+    durationOk: (d,h,m) => d>0 ? `${d}日${h}時間、安定稼働中` : h>0 ? `${h}時間${m}分、安定稼働中` : `${m}分、安定稼働中`,
+    durationWaiting: '初回の検査結果を待っています',
+    labelRestarts: '本日の自動再起動',
+    labelRestartsDetail: (success, attempts) => attempts > 0 ? `成功 ${success} 回、失敗 ${attempts - success} 回` : '',
+    labelLastcheck: '最終検査',
+    labelInterval: (n) => `${n}分ごとに検査`,
+    navWikiLabel: 'Wiki',
+    navPoolEventsLabel: 'プール明細',
+    navTerminalLabel: 'ターミナル',
+    logTitle: '見守りの記録',
+    emptyLog: 'まだ記録はありません。静かなものです。',
+    footerNote: 'NodeNannyがバックグラウンドで見守っています。何もしなくて大丈夫です',
+    logout: 'ログアウト',
+    checkBtn: '今すぐ検査',
+    checkingBtn: '検査中…',
+    connError: 'パネルが今サービスに接続できません（ノードの異常とは限りません。一時的なネットワークの問題か、パネル自体の不具合の可能性があります）',
+    dataStale: 'パネルに接続できません。以下の数値は古い情報の可能性があり、現在の実際の状態を反映していない場合があります',
+    poolBanner: '現在は予備プールの緊急ノードを使用中です——見知らぬ人のサーバーなので一時的な利用にとどめてください。自建ノードが復旧すれば自動的に戻ります',
+    poolSourcesSummary: (established, trial) => {
+      if (established + trial === 0) return '';
+      const parts = [];
+      if (established > 0) parts.push(`長期ソース ${established} 件`);
+      if (trial > 0) parts.push(`観察期間中の新規ソース ${trial} 件（信頼性を検証中）`);
+      return `予備プールのノードの出所：${parts.join('、')}`;
+    },
+    poolActiveNodesLine: (nodes) => {
+      if (!nodes || nodes.length === 0) return '';
+      const items = nodes.map((n) => {
+        const flag = countryCodeToFlag(n.countryCode) || '';
+        const tierLabel = n.tier === 'trial' ? '試用期ソース' : '長期ソース';
+        return `${flag ? flag + ' ' : ''}${n.sourceId}（${tierLabel}）`;
+      });
+      return `現在代わりに使われているノード：${items.join('、')}`;
+    },
+    starmapTitle: '見守り星図・予備ノード',
+    starmapTally: (established, trial, blacklisted) => `長期ソース ${established} ・試用期ソース ${trial} ・ブラックリスト ${blacklisted}`,
+    starmapLegendEstablished: '長期ソース',
+    starmapLegendTrial: '試用期ソース',
+    starmapLegendBlacklisted: 'ブラックリスト',
+    starmapHarborLabel: 'あなたのノード',
+    starmapOverflowMain: (n) => `他に ${n} 件の試用期ソースは図に表示されていません`,
+    starmapOverflowBlacklist: (n) => `他に ${n} 件のブラックリストソースは表示されていません`,
+    starmapRosterTitle: 'ノード名簿',
+    starmapTierEstablished: '長期',
+    starmapTierTrial: '試用期',
+    starmapTierBlacklisted: 'ブラックリスト・信頼性に疑いあり',
+    starmapStat: (passed, total) => `${passed}/${total} 件が検査を通過`,
+    starmapEmpty: '予備プールは有効ですが、まだ表示できるソースデータがありません——初回の取得がまだ実行されていないか、今回の候補ノードが検査を通過しなかった可能性があります。どちらも正常な状態で、故障ではありません。',
+    starmapCountryUnknown: '🏳️',
+    aiTitle: 'AI診断',
+    aiEmpty: 'まだ診断結果はありません。連続異常が一定回数に達すると自動で診断されます。手動で診断することもできます。',
+    aiDisabledHint: 'AI診断は無効です。config.json の ai.enabled と自分のAPIキーを設定してください',
+    aiErrorPrefix: '診断失敗：',
+    aiAt: (t) => `診断時刻：${t}`,
+    aiDiagnoseBtn: '今すぐ診断',
+    aiDiagnosingBtn: '診断中…',
+    syncTitle: 'コンテンツ同期',
+    syncKbTitle: 'ナレッジベース同期',
+    syncWikiTitle: 'Wiki 同期',
+    syncNeverChecked: 'まだ確認していません',
+    syncCheckBtn: '更新を確認',
+    syncCheckingBtn: '確認中…',
+    syncApplyKbBtn: 'マージを確定',
+    syncApplyWikiBtn: '上書きを確定',
+    syncApplyingBtn: '処理中…',
+    syncNotConfiguredKb: 'ナレッジベース同期元が未設定です（config.json の kbSync.rawUrl）',
+    syncNotConfiguredWiki: 'Wiki 同期元が未設定です（config.json の wikiSync.owner/repo）',
+    syncUpToDateKb: (n) => `最新です。現在 ${n} 件のナレッジベース項目があります`,
+    syncUpToDateWiki: (n) => `最新です。現在 ${n} 個のファイルを追跡中です`,
+    syncHasUpdateKb: (a,m,r) => `更新が見つかりました：追加 ${a} 件、変更 ${m} 件、削除 ${r} 件。下のボタンでマージを確定してください`,
+    syncHasUpdateWiki: (a,c,r) => `更新が見つかりました：追加 ${a} 個、変更 ${c} 個、削除 ${r} 個のファイル。下のボタンで上書きを確定してください`,
+    syncAppliedKb: (n) => `${n} 件をマージしました`,
+    syncAppliedWiki: (dl,rm) => `上書き完了：${dl} 個のファイルを更新${rm > 0 ? `、${rm} 個のファイルを削除` : ''}`,
+    syncErrorPrefix: '同期エラー：',
+    syncLastAppliedWiki: (t) => `前回の同期：${t}`,
+    reportTitle: '障害レポート',
+    reportHint: '現在の状態・最近のイベント・これまでに試みた自己修復アクション・直近のAI診断結果(あれば)を自動でまとめ、フォーラムへの投稿にそのまま貼り付けられるテキストを生成します。',
+    reportGenerateBtn: 'レポートを生成',
+    reportGeneratingBtn: '生成中…',
+    reportCopyBtn: 'コピー',
+    reportCopiedBtn: 'コピーしました',
+    reportErrorPrefix: '生成に失敗：',
+    subTitle: '購読情報',
+    subLead: '下記のアドレスをクライアントに登録してください。自建ノードに異常があり予備ノードが使える場合は自動的に切り替わり、復旧すれば自動的に戻ります。何もする必要はありません。',
+    subLabelNanny: 'NodeNanny スマート購読',
+    subBadgeRecommend: '推奨',
+    subHintNanny: 'クライアントの「購読」欄にこのアドレスを登録することをお勧めします。普段は自分のノードを使用し、自建ノードに異常があり予備ノードが利用可能な場合は次回の更新時に自動的に予備ノードへ切り替わり、復旧後は自動的に戻ります。',
+    subLabelNode: '元のノード購読アドレス',
+    subHintNode: 'これは装機スクリプトが生成した元の購読アドレスで、自分のノードのみを含み、予備ノードへの自動切替はありません。予備または確認用としてのみ使用し、日常は上記のスマート購読アドレスをご利用ください。',
+    subEmptyNode: 'まだ元の購読アドレスが検出されていません（ワンクリックスクリプトを使用しなかったか、自動検出に失敗した可能性があります。ワンクリックスクリプトを使用したことが確実な場合は、config.json に node.subscriptionUrl を直接手動で追加できます）。',
+    subWarnNannyUnusable: '現在利用可能な実際のノード購読がないため、スマート購読は一時的に使用できません。config.json の node.subscriptionUrl を確認してください。',
+    subCopy: 'コピー',
+    subCopied: 'コピーしました',
+    events: {
+      down: p => `${p.node} がポート${p.port}で応答しません`,
+      recovered: p => p.downMinutes ? `${p.node} が復旧しました（約${p.downMinutes}分の異常）` : `${p.node} が復旧しました`,
+      restart: p => `サービスの自動再起動を試みました（${p.serviceName || p.node}）`,
+      restart_failed: p => `自動再起動に失敗：${p.error || '不明なエラー'}`,
+      pool_activated: p => `予備プールの緊急ノードに一時切替しました（利用可能 ${p.count || 0} 件）`,
+      pool_deactivated: p => `ノードが復旧したため、自建の購読に自動的に戻しました`,
+      pool_refreshed: p => `予備プールを更新しました（現在 ${p.count || 0} 件）`,
+      pool_refresh_failed: p => `予備プールの更新に失敗：${p.error || '不明なエラー'}`,
+      pool_unavailable: p => `ノードが異常ですが、利用可能な予備ノードがまだありません`,
+      ai_diagnosis: p => `AIによる診断結果が届きました`,
+      ai_diagnosis_failed: p => `AI診断の呼び出しに失敗：${p.error || '不明なエラー'}`,
+      usability_ok: p => `二層可用性チェック合格：プロキシ経由で実際にリクエストし、正常な応答を確認`,
+      usability_down: p => `二層可用性チェック失敗：ポートは開いているが、プロキシ経由の実リクエストで期待した応答が得られず（意図的な妨害の可能性）${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_check_error: p => `二層可用性チェック自体に問題が発生（ノード障害とは限りません）：${p.detail || '不明な原因'}${kbSuggestionSuffix(p.kb)}`,
+      usability_restart_suggested: p => `二層可用性チェックが連続して失敗しています——自動再起動は行われません（この種の問題には再起動はほとんど役に立たないため）。手動での確認をおすすめします${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_auto_restart: p => `二層可用性チェックが持続的に異常です。NodeNannyがローカルのプロキシを自動的に一度再起動しました${p.restartOk ? '（再起動コマンドは成功）' : '（再起動コマンドが失敗、手動確認が必要）'}${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
+      kb_sync_applied: p => `ナレッジベース同期を ${p.count} 件マージしました`,
+      wiki_sync_applied: p => `Wiki同期を適用しました：${p.downloaded} 個のファイルを更新${p.removed > 0 ? `、${p.removed} 個を削除` : ''}`,
+      info: p => p.message || ''
+    }
+  },
+  de: {
+    code: 'DE',
+    timeZone: 'Europe/Berlin',
+    tzLabel: 'Berliner Zeit',
+    nodeWaiting: 'Verbinde mit Knoten…',
+    status: { ok: 'Ruhig', down: 'Störung – wird behoben', unknown: 'Wartet auf ersten Check' },
+    durationOk: (d,h,m) => d>0 ? `Seit ${d}T ${h}Std. stabil` : h>0 ? `Seit ${h}Std. ${m}Min. stabil` : `Seit ${m}Min. stabil`,
+    durationWaiting: 'Wartet auf das Ergebnis der ersten Prüfung',
+    labelRestarts: 'Neustarts heute',
+    labelRestartsDetail: (success, attempts) => attempts > 0 ? `${success} erfolgreich, ${attempts - success} fehlgeschlagen` : '',
+    labelLastcheck: 'Letzte Prüfung',
+    labelInterval: (n) => `Prüfung alle ${n} Min.`,
+    navWikiLabel: 'Wiki',
+    navPoolEventsLabel: 'Pool-Details',
+    navTerminalLabel: 'Terminal',
+    logTitle: 'Wächterbuch',
+    emptyLog: 'Noch nichts — alles ruhig.',
+    footerNote: 'NodeNanny wacht im Hintergrund — du musst nichts tun',
+    logout: 'Abmelden',
+    checkBtn: 'Jetzt prüfen',
+    checkingBtn: 'Prüfe…',
+    connError: 'Panel erreicht den Dienst gerade nicht (nicht unbedingt ein Node-Problem — kann ein vorübergehendes Netzwerkproblem sein oder am Panel-Prozess selbst liegen)',
+    dataStale: 'Panel nicht erreichbar — die folgenden Zahlen sind möglicherweise veraltet und spiegeln nicht unbedingt den aktuellen Status wider',
+    poolBanner: 'Läuft gerade über den Notfall-Pool — das sind fremde Server, nur zur vorübergehenden Nutzung. Sobald dein eigener Knoten wieder da ist, wird automatisch zurückgeschaltet.',
+    poolSourcesSummary: (established, trial) => {
+      if (established + trial === 0) return '';
+      const parts = [];
+      if (established > 0) parts.push(`${established} etablierte Quelle(n)`);
+      if (trial > 0) parts.push(`${trial} Quelle(n) in der Testphase (neu entdeckt, Vertrauen noch nicht bestätigt)`);
+      return `Knoten im Notfall-Pool stammen von: ${parts.join(', ')}`;
+    },
+    poolActiveNodesLine: (nodes) => {
+      if (!nodes || nodes.length === 0) return '';
+      const items = nodes.map((n) => {
+        const flag = countryCodeToFlag(n.countryCode) || '';
+        const tierLabel = n.tier === 'trial' ? 'Quelle in Testphase' : 'etablierte Quelle';
+        return `${flag ? flag + ' ' : ''}${n.sourceId} (${tierLabel})`;
+      });
+      return `Aktuell eingesprungen: ${items.join(', ')}`;
+    },
+    starmapTitle: 'Sternkarte · Ersatzknoten',
+    starmapTally: (established, trial, blacklisted) => `${established} etabliert · ${trial} in Testphase · ${blacklisted} gesperrt`,
+    starmapLegendEstablished: 'Etabliert',
+    starmapLegendTrial: 'In Testphase',
+    starmapLegendBlacklisted: 'Gesperrt',
+    starmapHarborLabel: 'Dein Knoten',
+    starmapOverflowMain: (n) => `${n} weitere Quelle(n) in Testphase nicht in der Karte angezeigt`,
+    starmapOverflowBlacklist: (n) => `${n} weitere gesperrte Quelle(n) nicht angezeigt`,
+    starmapRosterTitle: 'Knotenliste',
+    starmapTierEstablished: 'Etabliert',
+    starmapTierTrial: 'Testphase',
+    starmapTierBlacklisted: 'Gesperrt · vermutlich unzuverlässig',
+    starmapStat: (passed, total) => `${passed}/${total} Prüfungen bestanden`,
+    starmapEmpty: 'Der Notfall-Pool ist aktiviert, aber es gibt noch keine anzuzeigenden Quelldaten — entweder wurde der erste Abruf noch nicht ausgeführt, oder keiner der Kandidaten dieser Runde hat die Prüfung bestanden. Beides ist normal, kein Anzeichen für eine Störung.',
+    starmapCountryUnknown: '🏳️',
+    aiTitle: 'KI-Diagnose',
+    aiEmpty: 'Noch keine Diagnose. Läuft automatisch nach genug aufeinanderfolgenden Fehlern, oder manuell auslösen.',
+    aiDisabledHint: 'KI-Diagnose ist deaktiviert — ai.enabled und deinen eigenen API-Key in config.json setzen',
+    aiErrorPrefix: 'Diagnose fehlgeschlagen: ',
+    aiAt: (t) => `Diagnose um ${t}`,
+    aiDiagnoseBtn: 'Jetzt diagnostizieren',
+    aiDiagnosingBtn: 'Diagnose läuft…',
+    syncTitle: 'Inhalts-Synchronisierung',
+    syncKbTitle: 'Wissensdatenbank-Sync',
+    syncWikiTitle: 'Wiki-Sync',
+    syncNeverChecked: 'Noch nicht geprüft',
+    syncCheckBtn: 'Auf Updates prüfen',
+    syncCheckingBtn: 'Prüfe…',
+    syncApplyKbBtn: 'Zusammenführung bestätigen',
+    syncApplyWikiBtn: 'Überschreiben bestätigen',
+    syncApplyingBtn: 'Wird angewendet…',
+    syncNotConfiguredKb: 'Quelle für Wissensdatenbank-Sync nicht konfiguriert (kbSync.rawUrl in config.json)',
+    syncNotConfiguredWiki: 'Quelle für Wiki-Sync nicht konfiguriert (wikiSync.owner/repo in config.json)',
+    syncUpToDateKb: (n) => `Aktuell — ${n} Wissensdatenbank-Einträge`,
+    syncUpToDateWiki: (n) => `Aktuell — ${n} Dateien werden verfolgt`,
+    syncHasUpdateKb: (a,m,r) => `Update verfügbar: ${a} hinzugefügt, ${m} geändert, ${r} entfernt — unten bestätigen`,
+    syncHasUpdateWiki: (a,c,r) => `Update verfügbar: ${a} hinzugefügt, ${c} geändert, ${r} entfernte Dateien — unten bestätigen`,
+    syncAppliedKb: (n) => `${n} Einträge zusammengeführt`,
+    syncAppliedWiki: (dl,rm) => `Überschreiben abgeschlossen: ${dl} Dateien aktualisiert${rm > 0 ? `, ${rm} Dateien entfernt` : ''}`,
+    syncErrorPrefix: 'Sync-Fehler: ',
+    syncLastAppliedWiki: (t) => `Zuletzt synchronisiert: ${t}`,
+    reportTitle: 'Ausfallbericht',
+    reportHint: 'Fasst den aktuellen Status, jüngste Ereignisse, bereits versuchte Selbstheilungs-Maßnahmen und die letzte KI-Diagnose (falls vorhanden) automatisch zu einem Text zusammen, den Sie direkt in einen Forenbeitrag einfügen können.',
+    reportGenerateBtn: 'Bericht erstellen',
+    reportGeneratingBtn: 'Wird erstellt…',
+    reportCopyBtn: 'Kopieren',
+    reportCopiedBtn: 'Kopiert',
+    reportErrorPrefix: 'Erstellung fehlgeschlagen: ',
+    subTitle: 'Abo-Informationen',
+    subLead: 'Trage die Adresse unten in deinen Client ein. Bei einer Störung deines eigenen Knotens wird automatisch auf einen Ersatzknoten umgeschaltet, sobald einer verfügbar ist, und nach der Wiederherstellung automatisch zurückgeschaltet — du musst nichts tun.',
+    subLabelNanny: 'NodeNanny Smart-Abo',
+    subBadgeRecommend: 'Empfohlen',
+    subHintNanny: 'Trage diese Adresse in das „Abo"-Feld deines Clients ein. Normalerweise zeigt sie auf deinen eigenen Knoten; bei einer Störung und verfügbarem Ersatzknoten schaltet der nächste Abo-Refresh automatisch um, und nach der Wiederherstellung wieder zurück.',
+    subLabelNode: 'Ursprüngliche Knoten-Abo-Adresse',
+    subHintNode: 'Dies ist die ursprüngliche Abo-Adresse aus dem Installationsskript — nur dein eigener Knoten, ohne automatische Umschaltung. Nur als Rückfalloption oder zum Abgleich, für den täglichen Gebrauch bitte das Smart-Abo oben verwenden.',
+    subEmptyNode: 'Noch keine ursprüngliche Abo-Adresse erkannt (entweder wurde das Ein-Klick-Skript nicht verwendet, oder die automatische Erkennung ist fehlgeschlagen — falls du sicher bist, dass du das Ein-Klick-Skript verwendet hast, kannst du node.subscriptionUrl manuell in config.json ergänzen).',
+    subWarnNannyUnusable: 'Es gibt noch kein funktionierendes Node-Abonnement, daher kann das Smart-Abo derzeit nicht genutzt werden — prüfe node.subscriptionUrl in config.json.',
+    subCopy: 'Kopieren',
+    subCopied: 'Kopiert',
+    events: {
+      down: p => `${p.node} nicht erreichbar (Port ${p.port})`,
+      recovered: p => p.downMinutes ? `${p.node} ist wieder da — ca. ${p.downMinutes} Min. ausgefallen` : `${p.node} ist wieder da`,
+      restart: p => `Automatischer Neustart versucht (${p.serviceName || p.node})`,
+      restart_failed: p => `Automatischer Neustart fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
+      pool_activated: p => `Vorübergehend auf den Notfall-Pool umgeschaltet (${p.count || 0} Knoten verfügbar)`,
+      pool_deactivated: p => `Eigener Knoten wieder da — zurück auf dein eigenes Abo umgeschaltet`,
+      pool_refreshed: p => `Notfall-Pool aktualisiert — jetzt ${p.count || 0} Knoten verfügbar`,
+      pool_refresh_failed: p => `Aktualisierung des Notfall-Pools fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
+      pool_unavailable: p => `Knoten gestört, aber noch keine Ersatzknoten verfügbar`,
+      ai_diagnosis: p => `KI hat einen Diagnosevorschlag geliefert`,
+      ai_diagnosis_failed: p => `KI-Diagnoseaufruf fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
+      usability_ok: p => `Layer-2-Nutzbarkeitsprüfung bestanden: eine echte Anfrage über den Proxy erhielt eine normale Antwort`,
+      usability_down: p => `Layer-2-Nutzbarkeitsprüfung fehlgeschlagen: Port ist offen, aber eine echte Anfrage über den Proxy lieferte nicht das erwartete Ergebnis (möglicherweise gezielte Störung)${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_check_error: p => `Die Layer-2-Prüfung selbst hatte ein Problem (nicht zwingend ein Knotenausfall): ${p.detail || 'unbekannter Grund'}${kbSuggestionSuffix(p.kb)}`,
+      usability_restart_suggested: p => `Die Layer-2-Nutzbarkeitsprüfung ist wiederholt fehlgeschlagen — dies löst keinen automatischen Neustart aus (bei dieser Art von Problem hilft ein Neustart wahrscheinlich nicht). Ein manueller Blick lohnt sich${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_auto_restart: p => `Die Layer-2-Nutzbarkeitsprüfung schlägt anhaltend fehl — NodeNanny hat den lokalen Proxy automatisch einmal neu gestartet${p.restartOk ? ' (Neustart-Befehl erfolgreich)' : ' (Neustart-Befehl fehlgeschlagen, manuelle Prüfung nötig)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      kb_sync_applied: p => `Wissensdatenbank-Sync: ${p.count} Einträge zusammengeführt`,
+      wiki_sync_applied: p => `Wiki-Sync angewendet: ${p.downloaded} Datei(en) aktualisiert${p.removed > 0 ? `, ${p.removed} entfernt` : ''}`,
+      info: p => p.message || ''
+    }
+  },
+  ru: {
+    code: 'RU',
+    timeZone: 'Europe/Moscow',
+    tzLabel: 'Московское время',
+    nodeWaiting: 'Подключение к узлу…',
+    status: { ok: 'Спокойно', down: 'Сбой — устраняем', unknown: 'Ожидание первой проверки' },
+    durationOk: (d,h,m) => d>0 ? `Стабильно ${d} дн. ${h} ч.` : h>0 ? `Стабильно ${h} ч. ${m} мин.` : `Стабильно ${m} мин.`,
+    durationWaiting: 'Ожидаем результат первой проверки',
+    labelRestarts: 'Перезапуски сегодня',
+    labelRestartsDetail: (success, attempts) => attempts > 0 ? `успешно: ${success}, неудачно: ${attempts - success}` : '',
+    labelLastcheck: 'Последняя проверка',
+    labelInterval: (n) => `Проверка каждые ${n} мин.`,
+    navWikiLabel: 'Вики',
+    navPoolEventsLabel: 'Детали пула',
+    navTerminalLabel: 'Терминал',
+    logTitle: 'Журнал вахты',
+    emptyLog: 'Пока пусто — всё спокойно.',
+    footerNote: 'NodeNanny присматривает в фоне — тебе ничего делать не нужно',
+    logout: 'Выйти',
+    checkBtn: 'Проверить сейчас',
+    checkingBtn: 'Проверка…',
+    connError: 'Панель сейчас недоступна (это не обязательно означает неисправность узла — возможно, временный сбой сети или проблема самой панели)',
+    dataStale: 'Нет связи с панелью — цифры ниже могут быть устаревшими и не отражать текущее реальное состояние',
+    poolBanner: 'Сейчас используется резервный пул — это серверы незнакомцев, только для временного использования. Как только ваш узел восстановится, произойдёт автоматическое переключение обратно.',
+    poolSourcesSummary: (established, trial) => {
+      if (established + trial === 0) return '';
+      const parts = [];
+      if (established > 0) parts.push(`${established} проверенных источник(ов)`);
+      if (trial > 0) parts.push(`${trial} источник(ов) на испытательном сроке (новые, доверие ещё не подтверждено)`);
+      return `Узлы резервного пула получены из: ${parts.join(', ')}`;
+    },
+    poolActiveNodesLine: (nodes) => {
+      if (!nodes || nodes.length === 0) return '';
+      const items = nodes.map((n) => {
+        const flag = countryCodeToFlag(n.countryCode) || '';
+        const tierLabel = n.tier === 'trial' ? 'источник на испытании' : 'проверенный источник';
+        return `${flag ? flag + ' ' : ''}${n.sourceId} (${tierLabel})`;
+      });
+      return `Сейчас подменяют узел: ${items.join(', ')}`;
+    },
+    starmapTitle: 'Карта дозора · резервные узлы',
+    starmapTally: (established, trial, blacklisted) => `${established} проверенных · ${trial} на испытании · ${blacklisted} в чёрном списке`,
+    starmapLegendEstablished: 'Проверенные',
+    starmapLegendTrial: 'На испытании',
+    starmapLegendBlacklisted: 'В чёрном списке',
+    starmapHarborLabel: 'Ваш узел',
+    starmapOverflowMain: (n) => `Ещё ${n} источник(ов) на испытании не показаны на карте`,
+    starmapOverflowBlacklist: (n) => `Ещё ${n} источник(ов) из чёрного списка не показаны`,
+    starmapRosterTitle: 'Список узлов',
+    starmapTierEstablished: 'Проверенный',
+    starmapTierTrial: 'На испытании',
+    starmapTierBlacklisted: 'В чёрном списке · подозрение на ненадёжность',
+    starmapStat: (passed, total) => `${passed}/${total} проверок пройдено`,
+    starmapEmpty: 'Резервный пул включён, но пока нет данных об источниках — либо первая загрузка ещё не выполнена, либо ни один из кандидатов этого раунда не прошёл проверку. Оба варианта — норма, а не признак сбоя.',
+    starmapCountryUnknown: '🏳️',
+    aiTitle: 'ИИ-диагностика',
+    aiEmpty: 'Диагностики пока нет. Запускается автоматически после нескольких сбоев подряд, либо можно запустить вручную.',
+    aiDisabledHint: 'ИИ-диагностика отключена — задайте ai.enabled и свой API-ключ в config.json',
+    aiErrorPrefix: 'Ошибка диагностики: ',
+    aiAt: (t) => `Время диагностики: ${t}`,
+    aiDiagnoseBtn: 'Диагностировать сейчас',
+    aiDiagnosingBtn: 'Диагностика…',
+    syncTitle: 'Синхронизация контента',
+    syncKbTitle: 'Синхронизация базы знаний',
+    syncWikiTitle: 'Синхронизация вики',
+    syncNeverChecked: 'Ещё не проверялось',
+    syncCheckBtn: 'Проверить обновления',
+    syncCheckingBtn: 'Проверка…',
+    syncApplyKbBtn: 'Подтвердить слияние',
+    syncApplyWikiBtn: 'Подтвердить перезапись',
+    syncApplyingBtn: 'Применение…',
+    syncNotConfiguredKb: 'Источник синхронизации базы знаний не настроен (kbSync.rawUrl в config.json)',
+    syncNotConfiguredWiki: 'Источник синхронизации вики не настроен (wikiSync.owner/repo в config.json)',
+    syncUpToDateKb: (n) => `Актуально — записей базы знаний: ${n}`,
+    syncUpToDateWiki: (n) => `Актуально — отслеживается файлов: ${n}`,
+    syncHasUpdateKb: (a,m,r) => `Найдено обновление: добавлено ${a}, изменено ${m}, удалено ${r} — подтвердите слияние ниже`,
+    syncHasUpdateWiki: (a,c,r) => `Найдено обновление: добавлено ${a}, изменено ${c}, удалено ${r} файлов — подтвердите перезапись ниже`,
+    syncAppliedKb: (n) => `Объединено записей: ${n}`,
+    syncAppliedWiki: (dl,rm) => `Перезапись завершена: обновлено файлов ${dl}${rm > 0 ? `, удалено файлов ${rm}` : ''}`,
+    syncErrorPrefix: 'Ошибка синхронизации: ',
+    syncLastAppliedWiki: (t) => `Последняя синхронизация: ${t}`,
+    reportTitle: 'Отчёт о сбое',
+    reportHint: 'Автоматически собирает текущий статус, последние события, уже предпринятые действия самовосстановления и последний вывод AI-диагностики (если есть) в текст, который можно сразу вставить в сообщение на форуме.',
+    reportGenerateBtn: 'Сформировать отчёт',
+    reportGeneratingBtn: 'Формирование…',
+    reportCopyBtn: 'Копировать',
+    reportCopiedBtn: 'Скопировано',
+    reportErrorPrefix: 'Ошибка формирования: ',
+    subTitle: 'Информация о подписке',
+    subLead: 'Добавьте ссылку ниже в клиент. При сбое вашего узла произойдёт автоматическое переключение на резервный узел, а после восстановления — автоматическое переключение обратно. Вам ничего не нужно делать.',
+    subLabelNanny: 'Умная подписка NodeNanny',
+    subBadgeRecommend: 'Рекомендуется',
+    subHintNanny: 'Рекомендуем указать этот адрес в поле «подписка» вашего клиента. Обычно он указывает на ваш собственный узел; при сбое и наличии резервного узла следующее обновление подписки автоматически переключится на резерв, а после восстановления — обратно.',
+    subLabelNode: 'Исходный адрес подписки узла',
+    subHintNode: 'Это исходный адрес подписки, сгенерированный скриптом установки — только ваш собственный узел, без автоматического переключения на резерв. Используйте только как запасной вариант или для сверки, для повседневного использования — умную подписку выше.',
+    subEmptyNode: 'Исходный адрес подписки пока не обнаружен (либо скрипт в один клик не использовался, либо автоопределение не сработало — если вы уверены, что использовали скрипт в один клик, можно вручную добавить node.subscriptionUrl в config.json).',
+    subWarnNannyUnusable: 'Сейчас нет рабочей подписки узла, поэтому умная подписка временно недоступна — проверьте node.subscriptionUrl в config.json.',
+    subCopy: 'Копировать',
+    subCopied: 'Скопировано',
+    events: {
+      down: p => `${p.node} недоступен на порту ${p.port}`,
+      recovered: p => p.downMinutes ? `${p.node} снова в порядке — простой ~${p.downMinutes} мин.` : `${p.node} снова в порядке`,
+      restart: p => `Попытка автоматического перезапуска (${p.serviceName || p.node})`,
+      restart_failed: p => `Не удалось перезапустить: ${p.error || 'неизвестная ошибка'}`,
+      pool_activated: p => `Временно переключено на резервный пул (доступно узлов: ${p.count || 0})`,
+      pool_deactivated: p => `Узел восстановлен — переключено обратно на вашу подписку`,
+      pool_refreshed: p => `Резервный пул обновлён — доступно узлов: ${p.count || 0}`,
+      pool_refresh_failed: p => `Не удалось обновить резервный пул: ${p.error || 'неизвестная ошибка'}`,
+      pool_unavailable: p => `Узел недоступен, а резервных узлов пока нет`,
+      ai_diagnosis: p => `ИИ предоставил рекомендацию по диагностике`,
+      ai_diagnosis_failed: p => `Не удалось выполнить ИИ-диагностику: ${p.error || 'неизвестная ошибка'}`,
+      usability_ok: p => `Проверка реальной доступности пройдена: реальный запрос через прокси получил нормальный ответ`,
+      usability_down: p => `Проверка реальной доступности не пройдена: порт открыт, но реальный запрос через прокси не дал ожидаемого результата (возможна целевая блокировка)${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_check_error: p => `Проблема в самой проверке реальной доступности (это не обязательно означает сбой узла): ${p.detail || 'неизвестная причина'}${kbSuggestionSuffix(p.kb)}`,
+      usability_restart_suggested: p => `Проверка реальной доступности не проходит несколько раз подряд — это не вызовет автоматический перезапуск (в таком случае перезапуск вряд ли поможет). Стоит проверить вручную${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      usability_auto_restart: p => `Проверка реальной доступности постоянно не проходит — NodeNanny автоматически перезапустил локальный прокси один раз${p.restartOk ? ' (команда перезапуска выполнена успешно)' : ' (команда перезапуска не выполнилась, нужна ручная проверка)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
+      kb_sync_applied: p => `Синхронизация базы знаний: объединено записей — ${p.count}`,
+      wiki_sync_applied: p => `Синхронизация вики применена: обновлено файлов — ${p.downloaded}${p.removed > 0 ? `, удалено — ${p.removed}` : ''}`,
+      info: p => p.message || ''
+    }
+  }
+};
+
+let lang = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0,2);
+if (!I18N[lang]) lang = 'en';
+let latestData = null;
+let latestStarmapData = null;
+let poolActiveNow = false;
+
+function t() { return I18N[lang]; }
+
+function buildLangSwitch() {
+  const el = document.getElementById('lang-switch');
+  el.innerHTML = Object.keys(I18N).map(code =>
+    `<button data-lang="${code}" class="${code === lang ? 'active' : ''}">${I18N[code].code}</button>`
+  ).join('');
+  el.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      lang = btn.dataset.lang;
+      localStorage.setItem('nodenanny-lang', lang);
+      document.documentElement.lang = lang;
+      buildLangSwitch();
+      renderStatic();
+      if (latestData) renderData(latestData);
+    });
+  });
+}
+
+function renderStatic() {
+  const d = t();
+  document.getElementById('wiki-nav-label').textContent = d.navWikiLabel;
+  document.getElementById('pool-events-nav-label').textContent = d.navPoolEventsLabel;
+  document.getElementById('terminal-launch-label').textContent = d.navTerminalLabel;
+  document.getElementById('log-title-text').textContent = d.logTitle;
+  document.getElementById('log-tz-label').textContent = `(${d.tzLabel})`;
+  document.getElementById('footer-note').textContent = d.footerNote;
+  document.getElementById('check-btn').textContent = d.checkBtn;
+  document.getElementById('logout-btn').textContent = d.logout;
+  document.getElementById('label-restarts').textContent = d.labelRestarts;
+  document.getElementById('label-lastcheck').textContent = d.labelLastcheck;
+  document.getElementById('pool-banner-text').textContent = d.poolBanner;
+  document.getElementById('ai-title').textContent = d.aiTitle;
+  const btn = document.getElementById('ai-diagnose-btn');
+  if (!btn.disabled) btn.textContent = d.aiDiagnoseBtn;
+
+  document.getElementById('sub-title').textContent = d.subTitle;
+  document.getElementById('sub-lead').textContent = d.subLead;
+  document.getElementById('sub-label-nanny').textContent = d.subLabelNanny;
+  document.getElementById('sub-badge-recommend').textContent = d.subBadgeRecommend;
+  document.getElementById('sub-hint-nanny').textContent = d.subHintNanny;
+  document.getElementById('sub-label-node').textContent = d.subLabelNode;
+  document.getElementById('sub-hint-node').textContent = d.subHintNode;
+  document.getElementById('sub-empty-node').textContent = d.subEmptyNode;
+  document.getElementById('sub-warning-nanny').textContent = d.subWarnNannyUnusable;
+  document.getElementById('sub-copy-nanny').textContent = d.subCopy;
+  document.getElementById('sub-copy-node').textContent = d.subCopy;
+
+  document.getElementById('starmap-title').textContent = d.starmapTitle;
+  document.getElementById('starmap-legend-established').textContent = d.starmapLegendEstablished;
+  document.getElementById('starmap-legend-trial').textContent = d.starmapLegendTrial;
+  document.getElementById('starmap-legend-blacklisted').textContent = d.starmapLegendBlacklisted;
+  document.getElementById('starmap-roster-title').textContent = d.starmapRosterTitle;
+  document.getElementById('starmap-empty').textContent = d.starmapEmpty;
+  // 流量池检测明细已在v26拆分成独立页面(pool-events.html)，这里不再渲染，
+  // 也不应再引用 latestPoolEventsData/renderPoolEvents——v26遗留的这两处引用是
+  // 真实bug(变量和函数都已不存在，会导致renderStatic()执行到这里直接抛
+  // ReferenceError，后面的星图重绘等逻辑全部被中断)，本次已删除。
+  // 星图数据本身不跟着 renderData() 的轮询走(它来自单独的 /api/pool/starmap 接口)，
+  // 但切换语言时图上的文字(港口标注/溢出提示/名册)全部是用 JS 现画的 SVG 文本和 DOM，
+  // 需要用最近一次拿到的数据重新画一遍，不然语言切换后星图这块还是旧语言。
+  if (latestStarmapData) renderStarmap(latestStarmapData);
+
+  document.getElementById('sync-title').textContent = d.syncTitle;
+  renderSyncKb();
+  renderSyncWiki();
+
+  document.getElementById('report-title').textContent = d.reportTitle;
+  document.getElementById('report-hint').textContent = d.reportHint;
+  renderReportCard();
+}
+
+// 时区处理：不再依赖浏览器裸 locale（比如 "zh"、"en"）去猜 12/24 小时制和 AM/PM，
+// 而是给每种界面语言固定绑定一个具体时区（用 IANA 时区名交给 Intl 处理夏令时等换算），
+// 同时固定 hour12:false，不再让引擎自己猜格式。
+function localTimeOptions(extra) {
+  const tz = (I18N[lang] && I18N[lang].timeZone) || 'UTC';
+  return Object.assign({ timeZone: tz, hour12: false }, extra || {});
+}
+
+function formatClock(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleTimeString(lang, localTimeOptions({ hour: '2-digit', minute: '2-digit' }));
+}
+
+function renderLog(events) {
+  const d = t();
+  const list = document.getElementById('log-list');
+  if (!events || events.length === 0) {
+    list.innerHTML = `<p class="empty-log">${d.emptyLog}</p>`;
+    return;
+  }
+  const TICK = {
+    down: '✕', recovered: '✓', restart: '↻', restart_failed: '!',
+    pool_activated: '⇄', pool_deactivated: '⇄', pool_refreshed: '↻', pool_refresh_failed: '!', pool_unavailable: '!',
+    ai_diagnosis: '✦', ai_diagnosis_failed: '!',
+    usability_ok: '✓', usability_down: '⚠', usability_check_error: '!', usability_restart_suggested: '!', usability_auto_restart: '↻',
+    kb_sync_applied: '⇄', wiki_sync_applied: '⇄',
+    info: '·'
+  };
+  list.innerHTML = events.map(ev => {
+    const time = new Date(ev.time).toLocaleString(lang, localTimeOptions({ month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+    const renderer = d.events[ev.type] || d.events.info;
+    const msg = renderer(ev.params || {});
+    return `
+      <div class="log-item type-${ev.type}">
+        <span class="log-time">${time}</span>
+        <span class="log-tick">${TICK[ev.type] || '·'}</span>
+        <span class="log-msg">${msg}</span>
+      </div>`;
+  }).join('');
+}
+
+function renderAi(aiData) {
+  const d = t();
+  const content = document.getElementById('ai-content');
+  const btn = document.getElementById('ai-diagnose-btn');
+  const enabled = !!(aiData && aiData.enabled);
+
+  btn.style.display = enabled ? 'inline-block' : 'none';
+
+  if (!enabled) {
+    content.innerHTML = `<p class="ai-disabled-hint">${d.aiDisabledHint}</p>`;
+    return;
+  }
+
+  const diag = aiData.diagnosis;
+  if (!diag) {
+    content.innerHTML = `<p class="ai-empty">${d.aiEmpty}</p>`;
+    return;
+  }
+
+  const time = new Date(diag.at).toLocaleString(lang, localTimeOptions({ month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }));
+  if (diag.error) {
+    content.innerHTML = `<p class="ai-error"></p><p class="ai-meta">${d.aiAt(time)}</p>`;
+    content.querySelector('.ai-error').textContent = d.aiErrorPrefix + diag.error;
+  } else {
+    content.innerHTML = `<p class="ai-body"></p><p class="ai-meta">${d.aiAt(time)}</p>`;
+    content.querySelector('.ai-body').textContent = diag.text;
+  }
+}
+
+/* 数字滚动：数值变化时旧数字上滑消失、新数字从下方滑入；数值没变则不触发动画 */
+function rollNumber(containerId, newText) {
+  const el = document.getElementById(containerId);
+  const oldSlide = el.querySelector('.slide');
+  const oldText = oldSlide ? oldSlide.textContent : null;
+  newText = String(newText);
+  if (oldText === newText) return;
+  if (!oldSlide) {
+    el.innerHTML = `<span class="slide">${newText}</span>`;
+    return;
+  }
+  const newSlide = document.createElement('span');
+  newSlide.className = 'slide';
+  newSlide.textContent = newText;
+  newSlide.style.position = 'absolute';
+  newSlide.style.top = '24px';
+  newSlide.style.left = '0';
+  el.appendChild(newSlide);
+  requestAnimationFrame(() => {
+    oldSlide.style.transform = 'translateY(-24px)';
+    newSlide.style.transform = 'translateY(-24px)';
+  });
+  setTimeout(() => {
+    if (oldSlide.parentNode) oldSlide.remove();
+    newSlide.style.position = '';
+    newSlide.style.top = '';
+    newSlide.style.transform = '';
+  }, 550);
+}
+
+function renderData(data) {
+  const d = t();
+  document.body.className = 'status-' + (data.status || 'unknown');
+  document.getElementById('node-label').textContent = data.nodeName || '—';
+  document.getElementById('status-line').textContent = d.status[data.status] || d.status.unknown;
+  document.getElementById('duration-line').innerHTML = data.status !== 'unknown' && data.duration
+    ? `<strong>${d.durationOk(data.duration.days, data.duration.hours, data.duration.minutes)}</strong>`
+    : d.durationWaiting;
+  rollNumber('stat-restarts', data.restartsToday ?? 0);
+  document.getElementById('label-restarts-detail').textContent =
+    d.labelRestartsDetail(data.restartsSuccessToday ?? 0, data.restartsToday ?? 0);
+  rollNumber('stat-lastcheck', formatClock(data.lastCheck));
+  rollNumber('stat-interval', data.checkIntervalMinutes || '—');
+  document.getElementById('label-interval').textContent = d.labelInterval(data.checkIntervalMinutes || '—');
+  const poolBanner = document.getElementById('pool-banner');
+  const usingPool = !!(data.pool && data.pool.activeSource === 'pool');
+  poolBanner.classList.toggle('show', usingPool);
+  // 复查发现的遗漏(本轮补完,不是新需求):问题8的前端展示此前只加了容器div和五语言文案
+  // (poolSourcesSummary),但从没有代码真正读取data.pool.sources、算出来源统计、填进这个
+  // div——用户此前完全看不到"来源可信状态"，跟后端已经落盘的数据是脱节的。这里补上：
+  // 统计"已转正/legacy"来源数(status为空或trusted)和"观察期"来源数(status为trial)，
+  // 只统计这一轮ok:true(真的产出过节点)的来源，没有产出的来源不计入，避免把"这一轮
+  // 抓取失败"的来源也算进"有多少个来源在支撑池子"这个用户关心的数字里。
+  const sourcesLine = document.getElementById('pool-sources-line');
+  const poolSources = (data.pool && data.pool.sources) || [];
+  const established = poolSources.filter((s) => s.ok && (!s.status || s.status === 'trusted')).length;
+  const trial = poolSources.filter((s) => s.ok && s.status === 'trial').length;
+  const sourcesText = d.poolSourcesSummary(established, trial);
+  if (usingPool && sourcesText) {
+    sourcesLine.textContent = sourcesText;
+    sourcesLine.style.display = 'block';
+  } else {
+    sourcesLine.style.display = 'none';
+  }
+  // 批次五·第一批新增(交接文档40.6/40.7节):"当前接替的备用节点"这一行，数据来自
+  // /api/status新增的data.pool.activeNodes(只在activeSource==='pool'时后端才会填，
+  // 否则是空数组)，跟上面sourcesLine是两回事——sourcesLine统计的是"这一轮刷新一共
+  // 有哪些来源产出过节点"，这一行展示的是"眼下订阅里实际在用的是哪几个来源"，多数
+  // 情况下两者重合，但语义不同，分开展示更准确。
+  const activeNodesLine = document.getElementById('pool-active-nodes-line');
+  const activeNodesText = d.poolActiveNodesLine(data.pool && data.pool.activeNodes);
+  if (usingPool && activeNodesText) {
+    activeNodesLine.textContent = activeNodesText;
+    activeNodesLine.style.display = 'block';
+  } else {
+    activeNodesLine.style.display = 'none';
+  }
+  renderLog(data.events);
+  renderAi(data.ai);
+
+  // 星图的"接替航线"高光要知道现在是不是正用着流量池，这个状态只有 /api/status
+  // 这份数据里有(星图自己的 /api/pool/starmap 接口不返回 activeSource)，这里存成
+  // 全局变量，星图数据本身刷新较慢(6小时一轮)，但高光状态跟着 30 秒轮询实时更新。
+  if (poolActiveNow !== usingPool) {
+    poolActiveNow = usingPool;
+    if (latestStarmapData) renderStarmap(latestStarmapData);
+  }
+}
+
+async function refresh() {
+  try {
+    const res = await fetch('/api/status');
+    if (res.status === 401) {
+      window.location.href = '/login.html';
+      return;
+    }
+    const data = await res.json();
+    latestData = data;
+    renderData(data);
+    // 请求成功，清除上一次失败时留下的"数据可能已过时"标记（如果有的话）。
+    const staleBanner = document.getElementById('stale-banner');
+    staleBanner.classList.remove('show');
+    document.querySelector('.stat-grid').classList.remove('is-stale');
+    document.getElementById('log-list').classList.remove('is-stale');
+  } catch (err) {
+    // 发现17 修复（批次四第三轮真机测试）：以前这里只改了 status-line 一行文字，
+    // 下面的重启次数/最近检测时间/守望记录这些数字原样留在屏幕上、没有任何"可能已过时"的
+    // 提示，真机上出现过"状态行说连不上、但数字看起来像是刚发生的"这种误导画面，持续了
+    // 十几个小时没人发现——这跟"用户要能看懂、自己拿主意"这条核心目标直接冲突。
+    // 现在改成：状态行照常提示连不上，同时统计数字区和守望记录整体加上过期视觉标记（变灰变暗），
+    // 并且专门显示一条更醒目的"以下数字可能已过时"提示，不再只依赖那一行小字。
+    document.getElementById('status-line').textContent = t().connError;
+    const staleBanner = document.getElementById('stale-banner');
+    staleBanner.textContent = t().dataStale;
+    staleBanner.classList.add('show');
+    document.querySelector('.stat-grid').classList.add('is-stale');
+    document.getElementById('log-list').classList.add('is-stale');
+  }
+}
+
+/* ---------- 订阅信息（批次二新增） ---------- */
+// 二维码用纯前端 qrcodejs 库（走 CDN），不新增 npm 依赖。
+// 用白底方块包裹二维码，保证在深色主题下扫码时对比度仍然足够。
+function renderQr(containerId, text) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  if (!text) return;
+  if (typeof QRCode === 'undefined') {
+    // CDN 加载失败（比如网络问题），静默跳过二维码，链接文本依然可见可复制
+    return;
+  }
+  new QRCode(el, {
+    text: text,
+    width: 84,
+    height: 84,
+    correctLevel: QRCode.CorrectLevel.M
+  });
+}
+
+function renderSubscriptionInfo(data) {
+  const d = t();
+  document.getElementById('sub-url-nanny').textContent = data.nannySubUrl || '—';
+  renderQr('sub-qr-nanny', data.nannySubUrl);
+
+  // 发现5修复：智能订阅当前是否真的能用，由后端 nannySubUsable 判定，
+  // 不再无条件显示"这不影响智能订阅地址正常使用"这句过度乐观的话。
+  const nannyWarning = document.getElementById('sub-warning-nanny');
+  if (data.nannySubUsable === false) {
+    nannyWarning.style.display = '';
+    nannyWarning.textContent = d.subWarnNannyUnusable;
+  } else {
+    nannyWarning.style.display = 'none';
+  }
+
+  const nodeBody = document.getElementById('sub-node-body');
+  const nodeEmptyHint = document.getElementById('sub-empty-node');
+  const nodeHint = document.getElementById('sub-hint-node');
+  if (data.nodeSubscriptionUrl) {
+    document.getElementById('sub-url-node').textContent = data.nodeSubscriptionUrl;
+    renderQr('sub-qr-node', data.nodeSubscriptionUrl);
+    nodeBody.style.display = '';
+    nodeHint.style.display = '';
+    nodeEmptyHint.style.display = 'none';
+  } else {
+    nodeBody.style.display = 'none';
+    nodeHint.style.display = 'none';
+    nodeEmptyHint.style.display = '';
+    nodeEmptyHint.textContent = d.subEmptyNode;
+  }
+}
+
+async function loadSubscriptionInfo() {
+  try {
+    const res = await fetch('/api/subscription-info');
+    if (res.status === 401) return; // 未登录的情况交给主 refresh() 统一跳转登录页，这里静默跳过即可
+    const data = await res.json();
+    renderSubscriptionInfo(data);
+  } catch (err) {
+    // 订阅信息拿不到不影响面板主状态展示，静默失败；真机验证留给创始人自己装机时做
+  }
+}
+
+/* ---------- 守望星图（批次三第三步·前端渲染） ---------- */
+// 国家二字码转国旗 emoji，纯计算，不依赖任何库。查不到 countryCode 时用问号旗代替
+// (跟 pool.js 里 geoip 查不出来时返回 null 的情况对应)。
+function countryCodeToFlag(code) {
+  if (!code || code.length !== 2) return null;
+  const base = 127397; // 'A'.charCodeAt(0) 到区域指示符号 emoji 的偏移量
+  const upper = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(upper)) return null;
+  return String.fromCodePoint(upper.charCodeAt(0) + base, upper.charCodeAt(1) + base);
+}
+
+function svgEl(tag, attrs, text) {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) if (attrs[k] !== undefined && attrs[k] !== null) el.setAttribute(k, attrs[k]);
+  if (text != null) el.textContent = text;
+  return el;
+}
+
+// 灯塔仪表盘 v2（UI改版·灯塔）：生成 60 格钟表式刻度，每 5 格加粗一点，呼应"像钟"的整体
+// 意象，替代原来只有 4 个十字准星的简朴表盘。只在页面加载时画一次（表盘尺寸固定不变），
+// 不需要跟着状态刷新重新生成，方向定稿见 lighthouse-concept-preview.html 概念稿。
+function renderGaugeTicks() {
+  const group = document.getElementById('gauge-ticks');
+  if (!group) return;
+  const cx = 150, cy = 150;
+  for (let i = 0; i < 60; i++) {
+    const angle = (i / 60) * 360;
+    const isMajor = i % 5 === 0;
+    const r1 = isMajor ? 100 : 104;
+    const r2 = 112;
+    const rad = (angle - 90) * Math.PI / 180;
+    const x1 = cx + r1 * Math.cos(rad);
+    const y1 = cy + r1 * Math.sin(rad);
+    const x2 = cx + r2 * Math.cos(rad);
+    const y2 = cy + r2 * Math.sin(rad);
+    group.appendChild(svgEl('line', {
+      x1, y1, x2, y2,
+      class: `gauge-tick ${isMajor ? 'major' : 'minor'}`,
+      'stroke-width': isMajor ? 1.1 : 0.7
+    }));
+  }
+}
+renderGaugeTicks();
+
+// data 是 /api/pool/starmap 返回的原始数据（canvasWidth/canvasHeight/harborArea/stars/
+// overflowCount/blacklistOverflowCount），坐标已经由后端 core/star-layout.js 算好，
+// 这里只负责画，不做任何布局计算——职责跟设计文档(三十六.6节)说的一致。
+function renderStarmap(data) {
+  const d = t();
+  const card = document.getElementById('starmap-card');
+  const emptyBox = document.getElementById('starmap-empty');
+  const gridBox = document.querySelector('#starmap-card .starmap-grid');
+
+  if (!data || !data.enabled) {
+    // 流量池本身没开：这个功能对用户不适用，整张卡片隐藏，不留一个空壳占地方。
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  const stars = data.stars || [];
+  if (stars.length === 0) {
+    // 流量池开了，但暂时没有任何来源数据(还没跑过第一轮 / 这一轮全没通过检测)：
+    // 如实告诉用户这不代表故障，而不是干脆不显示这张卡片让用户以为功能没生效。
+    gridBox.style.display = 'none';
+    emptyBox.style.display = '';
+    emptyBox.textContent = d.starmapEmpty;
+    document.getElementById('starmap-tally').textContent = '';
+    return;
+  }
+  gridBox.style.display = '';
+  emptyBox.style.display = 'none';
+
+  const establishedStars = stars.filter((s) => s.status === 'established');
+  const trialStars = stars.filter((s) => s.status === 'trial');
+  const blacklistedStars = stars.filter((s) => s.status === 'blacklisted');
+
+  document.getElementById('starmap-tally').textContent =
+    d.starmapTally(establishedStars.length, trialStars.length, blacklistedStars.length);
+
+  // ---- 画图 ----
+  const svg = document.getElementById('starmap-svg');
+  svg.setAttribute('viewBox', `0 0 ${data.canvasWidth} ${data.canvasHeight}`);
+  svg.innerHTML = '';
+
+  // 港口图标：代表用户自己的主节点，位置由后端按画布尺寸换算好传过来。
+  const harbor = data.harborArea;
+  if (harbor) {
+    const cx = (harbor.xMin + harbor.xMax) / 2;
+    const topY = harbor.yMin;
+    const group = svgEl('g', { transform: `translate(${harbor.xMin},${topY})` });
+    group.appendChild(svgEl('path', { d: 'M0 14 L14 14 L7 0 Z', class: 'starmap-harbor-mark' }));
+    group.appendChild(svgEl('rect', { x: 6, y: 14, width: 2, height: 8, class: 'starmap-harbor-mark' }));
+    const label = svgEl('text', {
+      x: 7, y: 34, 'text-anchor': 'middle', class: 'starmap-harbor-label'
+    }, d.starmapHarborLabel);
+    group.appendChild(label);
+    svg.appendChild(group);
+
+    // 签名动效：正在用流量池应急节点时，从港口向每一个"这一轮真的贡献了通过检测节点"
+    // 的星星画一条黄铜色航线，呼应设计稿(pool-starchart-v2.html)的"星图导航"叙事。
+    // 不是只画一条线到"唯一的当前来源"——因为实际行为是把池子里所有通过检测的节点
+    // 同时放进订阅(见交接文档v30补充里对这个问题的说明)，画全部更符合真实情况。
+    if (poolActiveNow) {
+      stars.forEach((s) => {
+        if (s.status === 'blacklisted' || !(s.passed > 0)) return;
+        const path = svgEl('path', {
+          d: `M${cx} ${harbor.yMax} C ${cx} ${(harbor.yMax + s.y) / 2}, ${s.x} ${(harbor.yMax + s.y) / 2}, ${s.x} ${s.y - 5}`,
+          class: 'starmap-route'
+        });
+        svg.appendChild(path);
+      });
+    }
+  }
+
+  // 背景装饰星点，纯视觉，不代表任何数据。
+  const bgDots = [[10,10],[70,16],[160,12],[260,28],[320,55],[45,95],[120,205],[290,180],[15,145],[220,230]];
+  bgDots.forEach(([x, y]) => {
+    if (x < data.canvasWidth && y < data.canvasHeight) {
+      svg.appendChild(svgEl('circle', { cx: x, cy: y, r: 1, fill: '#e4dcc8', opacity: 0.18 }));
+    }
+  });
+
+  stars.forEach((s, i) => {
+    if (s.status === 'blacklisted') {
+      const g = svgEl('g', { transform: `translate(${s.x},${s.y})`, opacity: 0.4 });
+      g.appendChild(svgEl('line', { x1: -3.5, y1: -3.5, x2: 3.5, y2: 3.5, stroke: 'var(--rust)', 'stroke-width': 1.2 }));
+      g.appendChild(svgEl('line', { x1: -3.5, y1: 3.5, x2: 3.5, y2: -3.5, stroke: 'var(--rust)', 'stroke-width': 1.2 }));
+      svg.appendChild(g);
+    } else {
+      const r = s.status === 'established' ? 3.4 : 2.4;
+      svg.appendChild(svgEl('circle', {
+        class: `star tier-${s.status} star-halo`, cx: s.x, cy: s.y, r,
+        style: `animation-delay:${(i * 0.35).toFixed(2)}s`
+      }));
+      if (poolActiveNow && s.passed > 0) {
+        const ring = svgEl('circle', {
+          cx: s.x, cy: s.y, r: 6,
+          style: 'fill:none;stroke:var(--brass-soft);stroke-width:1;opacity:0.85;animation:sm-ring-pulse 1.8s ease-out infinite;'
+        });
+        svg.appendChild(ring);
+      }
+    }
+  });
+
+  if (data.overflowCount > 0) {
+    svg.appendChild(svgEl('text', { x: 6, y: 12, class: 'starmap-overflow-note' }, d.starmapOverflowMain(data.overflowCount)));
+  }
+  if (data.blacklistOverflowCount > 0) {
+    svg.appendChild(svgEl('text', { x: 6, y: 24, class: 'starmap-overflow-note' }, d.starmapOverflowBlacklist(data.blacklistOverflowCount)));
+  }
+
+  // ---- 画名册 ----
+  const tierLabel = (status) => status === 'established' ? d.starmapTierEstablished
+    : status === 'trial' ? d.starmapTierTrial : d.starmapTierBlacklisted;
+  const orderedStars = establishedStars.concat(trialStars, blacklistedStars);
+  const rosterList = document.getElementById('starmap-roster-list');
+  rosterList.innerHTML = orderedStars.map((s) => {
+    const flag = countryCodeToFlag(s.countryCode) || d.starmapCountryUnknown;
+    const statLine = s.candidateCount > 0 ? d.starmapStat(s.passed || 0, s.candidateCount) : '';
+    return `
+      <div class="starmap-row">
+        <span class="starmap-flag">${flag}</span>
+        <span class="starmap-source">${escapeHtml(s.sourceId)}${statLine ? `<span class="starmap-source-stat">${statLine}</span>` : ''}</span>
+        <span class="starmap-tier-tag ${s.status}">${tierLabel(s.status)}</span>
+      </div>`;
+  }).join('');
+}
+
+function escapeHtml(str) {
+  return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+async function loadStarmap() {
+  try {
+    const res = await fetch('/api/pool/starmap');
+    if (res.status === 401) return; // 同 loadSubscriptionInfo：跳转登录交给主 refresh() 统一处理
+    const data = await res.json();
+    latestStarmapData = data;
+    renderStarmap(data);
+  } catch (err) {
+    // 星图数据拿不到不影响面板主状态展示，静默失败，保留上一次成功渲染的画面
+  }
+}
+
+// ---------- 内容同步卡片(本轮新增):知识库/Wiki百科的远程同步面板入口 ----------
+// 后端(core/kb-sync.js、core/wiki-sync.js、panel-server.js对应路由)此前就已经写完并有
+// 单元测试覆盖，唯独面板前端完全没有入口——创始人作为非运维角色，没有UI就没法自己用，
+// 只能靠开发者手动敲curl测试。这里补上这一层，纯前端状态展示+按钮，不改动任何后端逻辑。
+// kb-sync走"check→看diff→确认合并(默认全量接受，不做逐条勾选，保持简单)"三步；
+// wiki-sync走"check→看diff→确认覆盖"两步——跟各自后端模块文件头注释描述的流程一致。
+let syncKbState = { checked: false, hasUpdate: false, applied: false, entryCount: 0, added: 0, modified: 0, removed: 0, appliedCount: 0, error: null };
+let syncWikiState = { checked: false, hasUpdate: false, applied: false, trackedFileCount: 0, added: 0, changed: 0, removed: 0, downloadedCount: 0, removedCount: 0, error: null, lastAppliedAt: null };
+
+function renderSyncKb() {
+  const d = t();
+  const statusEl = document.getElementById('sync-kb-status');
+  const resultEl = document.getElementById('sync-kb-result');
+  const checkBtn = document.getElementById('sync-kb-check-btn');
+  const applyBtn = document.getElementById('sync-kb-apply-btn');
+
+  document.getElementById('sync-kb-title').textContent = d.syncKbTitle;
+  if (!checkBtn.disabled) checkBtn.textContent = d.syncCheckBtn;
+  if (!applyBtn.disabled) applyBtn.textContent = d.syncApplyKbBtn;
+  resultEl.classList.remove('sync-error');
+
+  if (syncKbState.error === 'kb_sync_not_configured') {
+    statusEl.textContent = d.syncNotConfiguredKb;
+    resultEl.textContent = '';
+    checkBtn.style.display = 'none';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  checkBtn.style.display = '';
+
+  if (syncKbState.applied) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncAppliedKb(syncKbState.appliedCount);
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncKbState.error) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncErrorPrefix + syncKbState.error;
+    resultEl.classList.add('sync-error');
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (!syncKbState.checked) {
+    statusEl.textContent = d.syncNeverChecked;
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncKbState.hasUpdate) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncHasUpdateKb(syncKbState.added, syncKbState.modified, syncKbState.removed);
+    applyBtn.style.display = '';
+  } else {
+    statusEl.textContent = d.syncUpToDateKb(syncKbState.entryCount);
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+  }
+}
+
+function renderSyncWiki() {
+  const d = t();
+  const statusEl = document.getElementById('sync-wiki-status');
+  const resultEl = document.getElementById('sync-wiki-result');
+  const checkBtn = document.getElementById('sync-wiki-check-btn');
+  const applyBtn = document.getElementById('sync-wiki-apply-btn');
+
+  document.getElementById('sync-wiki-title').textContent = d.syncWikiTitle;
+  if (!checkBtn.disabled) checkBtn.textContent = d.syncCheckBtn;
+  if (!applyBtn.disabled) applyBtn.textContent = d.syncApplyWikiBtn;
+  resultEl.classList.remove('sync-error');
+
+  if (syncWikiState.error === 'wiki_sync_not_configured') {
+    statusEl.textContent = d.syncNotConfiguredWiki;
+    resultEl.textContent = '';
+    checkBtn.style.display = 'none';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  checkBtn.style.display = '';
+
+  if (syncWikiState.applied) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncAppliedWiki(syncWikiState.downloadedCount, syncWikiState.removedCount);
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncWikiState.error) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncErrorPrefix + syncWikiState.error;
+    resultEl.classList.add('sync-error');
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (!syncWikiState.checked) {
+    statusEl.textContent = syncWikiState.lastAppliedAt
+      ? d.syncLastAppliedWiki(new Date(syncWikiState.lastAppliedAt).toLocaleString(lang, localTimeOptions({ month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })))
+      : d.syncNeverChecked;
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncWikiState.hasUpdate) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncHasUpdateWiki(syncWikiState.added, syncWikiState.changed, syncWikiState.removed);
+    applyBtn.style.display = '';
+  } else {
+    statusEl.textContent = d.syncUpToDateWiki(syncWikiState.trackedFileCount);
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+  }
+}
+
+// wiki-sync有持久化的本地状态(getStatus读data/wiki-sync-state.json)，进面板时先拉一次，
+// 这样"上次同步时间/追踪文件数"不用等用户手动点检查才看得到。kb-sync后端没有对应的
+// 只读status接口(只有check/diff/apply)，保持"还没检查过"的初始文案即可，不额外造接口。
+async function loadSyncStatus() {
+  try {
+    const res = await fetch('/api/wiki-sync/status');
+    if (res.status === 401) return;
+    const data = await res.json();
+    if (data.ok && data.status) {
+      syncWikiState = Object.assign({}, syncWikiState, {
+        trackedFileCount: data.status.trackedFileCount,
+        lastAppliedAt: data.status.lastAppliedAt
+      });
+      renderSyncWiki();
+    }
+  } catch (err) {
+    // 拿不到初始状态不影响面板其它功能，静默失败，用户仍可手动点"检查更新"
+  }
+}
+
+document.getElementById('sync-kb-check-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncCheckingBtn;
+  try {
+    const res = await fetch('/api/kb/sync/check', { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) {
+      syncKbState = { checked: true, error: data.error || 'unknown_error' };
+    } else if (data.hasUpdate) {
+      const diffRes = await fetch('/api/kb/sync/diff');
+      const diff = await diffRes.json();
+      syncKbState = diff.ok
+        ? { checked: true, hasUpdate: true, added: diff.added.length, modified: diff.modified.length, removed: diff.removed.length, entryCount: data.entryCount, error: null }
+        : { checked: true, error: diff.error || 'diff_failed' };
+    } else {
+      syncKbState = { checked: true, hasUpdate: false, entryCount: data.entryCount, error: null };
+    }
+  } catch (err) {
+    syncKbState = { checked: true, error: err.message };
+  } finally {
+    btn.disabled = false;
+    renderSyncKb();
+  }
+});
+
+document.getElementById('sync-kb-apply-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncApplyingBtn;
+  try {
+    const res = await fetch('/api/kb/sync/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+    });
+    const data = await res.json();
+    syncKbState = data.ok
+      ? { checked: true, applied: true, appliedCount: data.appliedCount, error: null }
+      : { checked: true, error: data.error || 'apply_failed' };
+    if (data.ok) await refresh(); // 事件日志里会多一条kb_sync_applied，顺手刷新一下
+  } catch (err) {
+    syncKbState = { checked: true, error: err.message };
+  } finally {
+    btn.disabled = false;
+    renderSyncKb();
+  }
+});
+
+document.getElementById('sync-wiki-check-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncCheckingBtn;
+  try {
+    const res = await fetch('/api/wiki-sync/check', { method: 'POST' });
+    const data = await res.json();
+    syncWikiState = data.ok
+      ? Object.assign({}, syncWikiState, {
+          checked: true, applied: false, error: null,
+          hasUpdate: data.hasUpdate,
+          added: data.added.length, changed: data.changed.length, removed: data.removed.length,
+          trackedFileCount: data.totalRemoteFiles
+        })
+      : Object.assign({}, syncWikiState, { checked: true, applied: false, error: data.error || 'unknown_error' });
+  } catch (err) {
+    syncWikiState = Object.assign({}, syncWikiState, { checked: true, applied: false, error: err.message });
+  } finally {
+    btn.disabled = false;
+    renderSyncWiki();
+  }
+});
+
+document.getElementById('sync-wiki-apply-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncApplyingBtn;
+  try {
+    const res = await fetch('/api/wiki-sync/apply', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      syncWikiState = Object.assign({}, syncWikiState, {
+        applied: true, downloadedCount: data.downloadedCount, removedCount: data.removedCount, error: null
+      });
+      await refresh(); // 事件日志里会多一条wiki_sync_applied，顺手刷新一下
+    } else {
+      const failCount = (data.failures || []).length;
+      syncWikiState = Object.assign({}, syncWikiState, {
+        applied: false, error: failCount > 0 ? `partial_failure(${failCount})` : (data.error || 'apply_failed')
+      });
+    }
+  } catch (err) {
+    syncWikiState = Object.assign({}, syncWikiState, { applied: false, error: err.message });
+  } finally {
+    btn.disabled = false;
+    renderSyncWiki();
+  }
+});
+
+// ---------- 故障报告卡片(任务清单第4项):点"生成报告"调用后端组装好的纯文本，
+// 展示在只读textarea里，方便用户全选/用"复制"按钮直接复制去发论坛帖子。
+// 报告内容本身跟随面板当前语言(lang)生成，不需要额外的语言选择。
+let reportState = { text: null, error: null };
+
+function renderReportCard() {
+  const d = t();
+  const generateBtn = document.getElementById('report-generate-btn');
+  const copyBtn = document.getElementById('report-copy-btn');
+  const textarea = document.getElementById('report-textarea');
+  const hintEl = document.getElementById('report-hint');
+
+  if (!generateBtn.disabled) generateBtn.textContent = d.reportGenerateBtn;
+  if (!copyBtn.disabled) copyBtn.textContent = d.reportCopyBtn;
+
+  if (reportState.error) {
+    hintEl.textContent = d.reportErrorPrefix + reportState.error;
+    textarea.style.display = 'none';
+    copyBtn.style.display = 'none';
+    return;
+  }
+  hintEl.textContent = d.reportHint;
+  if (reportState.text) {
+    textarea.style.display = '';
+    textarea.value = reportState.text;
+    copyBtn.style.display = '';
+  } else {
+    textarea.style.display = 'none';
+    copyBtn.style.display = 'none';
+  }
+}
+
+document.getElementById('report-generate-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.reportGeneratingBtn;
+  try {
+    const res = await fetch('/api/failure-report?lang=' + encodeURIComponent(lang));
+    const data = await res.json();
+    reportState = data.ok ? { text: data.text, error: null } : { text: null, error: data.error || 'unknown_error' };
+  } catch (err) {
+    reportState = { text: null, error: err.message };
+  } finally {
+    btn.disabled = false;
+    renderReportCard();
+  }
+});
+
+document.getElementById('report-copy-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  if (!reportState.text) return;
+  try {
+    await navigator.clipboard.writeText(reportState.text);
+    btn.textContent = d.reportCopiedBtn;
+    setTimeout(() => { btn.textContent = d.reportCopyBtn; }, 1500);
+  } catch (err) {
+    // Clipboard API 不可用时静默失败，用户仍可以在textarea里手动全选复制
+  }
+});
+
+document.querySelectorAll('.sub-copy-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const targetEl = document.getElementById(btn.dataset.target);
+    const text = targetEl ? targetEl.textContent : '';
+    if (!text || text === '—') return;
+    try {
+      await navigator.clipboard.writeText(text);
+      const original = t().subCopy;
+      btn.textContent = t().subCopied;
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    } catch (err) {
+      // Clipboard API 在非 HTTPS/无权限环境下可能不可用，静默失败，用户仍可手动选中文本复制
+    }
+  });
+});
+
+document.getElementById('check-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.checkingBtn;
+  try {
+    await fetch('/api/check', { method: 'POST' });
+    await refresh();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = d.checkBtn;
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } finally {
+    window.location.href = '/login.html';
+  }
+});
+
+document.getElementById('ai-diagnose-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.aiDiagnosingBtn;
+  try {
+    await fetch('/api/ai/diagnose', { method: 'POST' });
+    await refresh();
+  } finally {
+    btn.disabled = false;
+    btn.textContent = t().aiDiagnoseBtn;
+  }
+});
+
+/* ---------- 终端悬浮层：开关逻辑 ----------
+   iframe.src默认是空的，只有第一次点开时才赋值成/terminal.html——避免
+   还没点开就提前建立WebSocket连接。关闭时把src重置为about:blank，
+   让iframe内的页面被卸载，WebSocket随之干净断开，不会挂在后台占用会话。 */
+const terminalOverlay = document.getElementById('terminal-overlay');
+const terminalFrame = document.getElementById('terminal-overlay-frame');
+
+function openTerminalOverlay() {
+  if (!terminalFrame.src || terminalFrame.src === 'about:blank') {
+    terminalFrame.src = '/terminal.html?embedded=1';
+  }
+  terminalOverlay.classList.add('open');
+  terminalOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeTerminalOverlay() {
+  terminalOverlay.classList.remove('open');
+  terminalOverlay.setAttribute('aria-hidden', 'true');
+  terminalFrame.src = 'about:blank';
+}
+
+document.getElementById('terminal-launch-btn').addEventListener('click', openTerminalOverlay);
+document.getElementById('terminal-overlay-close').addEventListener('click', closeTerminalOverlay);
+document.getElementById('terminal-overlay-backdrop').addEventListener('click', closeTerminalOverlay);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && terminalOverlay.classList.contains('open')) closeTerminalOverlay();
+});
+// terminal.html嵌入在悬浮层里时，面包屑"返回主面板"不再跳转页面本身，
+// 而是通过postMessage告诉外层关闭悬浮层——这里监听那条消息。
+window.addEventListener('message', (e) => {
+  if (e.origin !== window.location.origin) return;
+  if (e.data === 'nodenanny:terminal:close') closeTerminalOverlay();
+});
+
+document.documentElement.lang = lang;
+buildLangSwitch();
+renderStatic();
+refresh();
+loadSubscriptionInfo();
+loadStarmap();
+loadSyncStatus();
+setInterval(refresh, 30000);
+// 星图数据(来源信任状态、国家码)不像主状态那样秒级变化，后端本身也只在流量池
+// 刷新周期(默认 6 小时)里才会有新内容，60 秒轮询一次足够及时，不需要跟主状态
+// 一样 30 秒——两者独立轮询，互不影响。
+setInterval(loadStarmap, 60000);
+</script>
+</body>
+</html>

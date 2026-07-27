@@ -1,0 +1,30 @@
+{
+  "name": "nodenanny",
+  "version": "0.1.0",
+  "description": "个人自建代理节点的自动看护工具：存活监控、自动重启、邮件通知、可视化面板。给不懂运维的人用。",
+  "main": "core/monitor.js",
+  "scripts": {
+    "monitor": "node core/monitor.js",
+    "panel": "node core/panel-server.js"
+  },
+  "keywords": [
+    "self-hosted",
+    "vpn",
+    "xray",
+    "sing-box",
+    "monitoring",
+    "自愈",
+    "自建节点",
+    "自动重启"
+  ],
+  "author": "",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "@ip-location-db/geo-whois-asn-country-mmdb": "^2.3.2026061719",
+    "express": "^5.2.1",
+    "maxmind": "^5.0.6",
+    "nodemailer": "^9.0.3",
+    "ws": "^8.18.0",
+    "node-pty": "^1.0.0"
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+config/config.json
+data/store.json
+data/pool.json
+data/pool-refresh.lock
+data/v2ray.txt
+data/sources.json
+data/repo-fetch-probe-cache.json
+data/knowledge-base.local.json
+data/kb-staging.json
+data/wiki-staging/
+data/pool-events.json
+data/discovered-sources.json

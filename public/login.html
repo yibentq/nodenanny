@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NodeNanny · 登录</title>
+<link rel="icon" type="image/png" href="/assets/favicon.png?v=2">
+<link rel="shortcut icon" type="image/png" href="/assets/favicon.png?v=2">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-a: #121a1c;
+    --bg-b: #0c1214;
+    --surface: #161e21;
+    --surface-2: #1a2124;
+    --hairline: #2b3538;
+    --text: #e4dcc8;
+    --text-muted: #8a8f8a;
+    --brass: #c8963e;
+    --brass-soft: #e0b667;
+    --brass-dim: #7d6534;
+    --teal: #4d8478;
+    --teal-soft: #7fada4;
+    --rust: #c05a44;
+    --rust-soft: #dd8468;
+    --mortar: rgba(200, 150, 62, 0.07);
+    --relic-glow: rgba(200, 150, 62, 0.18);
+    --patina-mid: #8a7a45;
+    --surface-glass: rgba(22, 30, 33, 0.64);
+    --corner-brackets:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 13 V1 H13' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='1' cy='1' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M15 13 V1 H3' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='15' cy='1' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M1 3 V15 H13' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='1' cy='15' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M15 3 V15 H3' fill='none' stroke='%23c8963e' stroke-width='1.4'/%3E%3Ccircle cx='15' cy='15' r='1.6' fill='%23c8963e'/%3E%3C/svg%3E");
+    --corner-positions: top 10px left 10px, top 10px right 10px, bottom 10px left 10px, bottom 10px right 10px;
+    --corner-sizes: 16px 16px, 16px 16px, 16px 16px, 16px 16px;
+    --corner-repeats: no-repeat, no-repeat, no-repeat, no-repeat;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 1100px 640px at 78% -8%, #1c2620 0%, transparent 55%),
+      linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, 'PingFang SC', 'Hiragino Sans', 'Yu Gothic',
+      'Microsoft YaHei', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+
+  /* 跟主面板同一套石砌纹理，保持登录页与面板是"同一栋建筑"的观感 */
+  body::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-repeat: repeat, repeat;
+    background-position: 0 0, center;
+    background-size: 220px 90px, 72px 72px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M4 4 H36 V36 H12 V12 H28 V28 H20' fill='none' stroke='%23c8963e' stroke-width='1.3' stroke-opacity='0.4'/%3E%3C/svg%3E");
+  }
+  html[lang="zh"] body::before {
+    background-size: 220px 90px, 72px 72px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M4 4 H36 V36 H12 V12 H28 V28 H20' fill='none' stroke='%23e0b667' stroke-width='1.3' stroke-opacity='0.42'/%3E%3C/svg%3E");
+  }
+  html[lang="ja"] body::before {
+    background-size: 220px 90px, 64px 32px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 32'%3E%3Cpath d='M2,32 A30,30 0 0 1 62,32' fill='none' stroke='%236fa08f' stroke-width='1.1' stroke-opacity='0.4'/%3E%3Cpath d='M17,32 A15,15 0 0 1 47,32' fill='none' stroke='%236fa08f' stroke-width='1.1' stroke-opacity='0.4'/%3E%3C/svg%3E");
+  }
+  html[lang="en"] body::before {
+    background-size: 220px 90px, 80px 40px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 40'%3E%3Cpath d='M2,20 C20,2 20,38 40,20 S60,2 78,20' fill='none' stroke='%23b98a52' stroke-width='1.3' stroke-opacity='0.38'/%3E%3Ccircle cx='2' cy='20' r='1.8' fill='%23b98a52' fill-opacity='0.42'/%3E%3Ccircle cx='40' cy='20' r='1.8' fill='%23b98a52' fill-opacity='0.42'/%3E%3Ccircle cx='78' cy='20' r='1.8' fill='%23b98a52' fill-opacity='0.42'/%3E%3C/svg%3E");
+  }
+  html[lang="de"] body::before {
+    background-size: 220px 90px, 50px 50px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 50'%3E%3Crect x='1' y='1' width='48' height='48' fill='none' stroke='%237a5c34' stroke-width='1.2' stroke-opacity='0.38'/%3E%3Cpath d='M1 1 L49 49 M49 1 L1 49' stroke='%237a5c34' stroke-width='1.2' stroke-opacity='0.38'/%3E%3C/svg%3E");
+  }
+  html[lang="ru"] body::before {
+    background-size: 220px 90px, 50px 30px;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 220 90'%3E%3Cline x1='0' y1='45' x2='220' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='110' y1='0' x2='110' y2='45' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='55' y1='45' x2='55' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3Cline x1='165' y1='45' x2='165' y2='90' stroke='%23c8963e' stroke-width='1' stroke-opacity='0.12'/%3E%3C/svg%3E"),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 50 30'%3E%3Cpath d='M0,28 Q12,2 25,16 Q38,2 50,28' fill='none' stroke='%23c17a3a' stroke-width='1.3' stroke-opacity='0.4'/%3E%3C/svg%3E");
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .lang-switch {
+    display: flex;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+  .lang-switch button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--hairline);
+    color: var(--text-muted);
+    padding: 4px 11px;
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  .lang-switch button:last-child { border-right: none; }
+  .lang-switch button:hover { color: var(--text); }
+  .lang-switch button.active { color: var(--brass-soft); border-bottom: 1px solid var(--brass); }
+
+  .card {
+    position: relative;
+    width: 100%;
+    max-width: 360px;
+    background-color: var(--surface-glass);
+    background-image: linear-gradient(135deg, rgba(200, 150, 62, 0.05) 0%, transparent 42%, rgba(77, 132, 120, 0.05) 100%);
+    backdrop-filter: blur(16px) saturate(1.15);
+    -webkit-backdrop-filter: blur(16px) saturate(1.15);
+    border: 1px solid var(--hairline);
+    border-radius: 6px;
+    padding: 40px 32px 32px;
+    text-align: center;
+  }
+  @supports not (backdrop-filter: blur(1px)) {
+    .card { background-color: var(--surface); }
+  }
+  /* 跟主面板同一套：真实 border 画的 L 形边角 + 圆铆钉，不用背景图拼接，
+     四个角在任何浏览器里都对称一致。 */
+  .rivet {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+  }
+  .rivet::before {
+    content: '';
+    position: absolute;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--brass);
+    box-shadow: 0 0 4px var(--relic-glow);
+  }
+  .rivet.tl { top: 10px; left: 10px; border-top: 1.4px solid var(--brass); border-left: 1.4px solid var(--brass); }
+  .rivet.tl::before { top: -2.5px; left: -2.5px; }
+  .rivet.tr { top: 10px; right: 10px; border-top: 1.4px solid var(--brass); border-right: 1.4px solid var(--brass); }
+  .rivet.tr::before { top: -2.5px; right: -2.5px; }
+  .rivet.bl { bottom: 10px; left: 10px; border-bottom: 1.4px solid var(--brass); border-left: 1.4px solid var(--brass); }
+  .rivet.bl::before { bottom: -2.5px; left: -2.5px; }
+  .rivet.br { bottom: 10px; right: 10px; border-bottom: 1.4px solid var(--brass); border-right: 1.4px solid var(--brass); }
+  .rivet.br::before { bottom: -2.5px; right: -2.5px; }
+
+  .brand { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 22px; }
+  .brand svg { width: 30px; height: 30px; flex-shrink: 0; }
+  .brand-word {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: 20px;
+  }
+  /* 灯芯：呼吸灯式脉动，跟主面板的信号灯呼应，替代原来静态的图腾 */
+  .lamp-core { animation: login-breathe 3.4s ease-in-out infinite; }
+  @keyframes login-breathe { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .lamp-core { animation: none; } }
+
+  .subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 26px;
+    line-height: 1.6;
+  }
+
+  input[type="password"] {
+    width: 100%;
+    min-height: 46px;
+    background: var(--surface-2);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 13px 14px;
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    /* 16px 起，避免 iOS Safari 聚焦输入框时自动放大页面 */
+    font-size: 16px;
+    letter-spacing: 0.04em;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  input[type="password"]:focus { border-color: var(--brass); }
+  input[type="password"]::placeholder { color: var(--text-muted); }
+
+  button.submit {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 14px;
+    background: var(--brass);
+    border: none;
+    border-radius: 4px;
+    padding: 13px 14px;
+    color: #12181a;
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease;
+  }
+  button.submit:hover { background: var(--brass-soft); }
+  button.submit:disabled { opacity: 0.6; cursor: default; }
+
+  .error {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--rust-soft);
+    min-height: 18px;
+  }
+
+  .footer-note {
+    margin-top: 28px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 360px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 400px) {
+    .card { padding: 32px 22px 26px; border-radius: 6px; }
+    .brand svg { width: 26px; height: 26px; }
+    .brand-word { font-size: 18px; }
+    .lang-switch button { padding: 4px 9px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="lang-switch" id="lang-switch" role="group" aria-label="Language"></div>
+
+  <div class="card">
+    <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <path d="M14.5 3 L17.5 3 L19 10 L13 10 Z" fill="var(--brass)" class="lamp-core"/>
+        <path d="M13.3 10.5 H18.7 L20.5 24 H11.5 Z" fill="none" stroke="var(--text-muted)" stroke-width="1.1"/>
+        <line x1="12.2" y1="15" x2="19.8" y2="15" stroke="var(--text-muted)" stroke-width="1"/>
+        <line x1="11.8" y1="19.5" x2="20.2" y2="19.5" stroke="var(--text-muted)" stroke-width="1"/>
+        <line x1="6" y1="24" x2="26" y2="24" stroke="var(--text-muted)" stroke-width="1.2"/>
+      </svg>
+      <span class="brand-word">NodeNanny</span>
+    </div>
+    <p class="subtitle" id="subtitle"></p>
+    <form id="login-form" autocomplete="off">
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+      <button type="submit" class="submit" id="submit-btn"></button>
+      <div class="error" id="error-msg"></div>
+    </form>
+  </div>
+
+  <p class="footer-note" id="footer-note"></p>
+
+<script>
+const I18N = {
+  zh: { code: '中', subtitle: '灯塔看守人在这里核对你的身份', placeholder: '输入密码', submit: '进入', submitting: '核对中…', wrong: '密码不对，再试一次', locked: '尝试太多次了，请等一分钟后再试', networkErr: '连不上面板服务，稍后再试', footer: '密码就是你在 config.json 里设置的 panel.password' },
+  en: { code: 'EN', subtitle: 'The keeper checks your key before letting you in', placeholder: 'Enter password', submit: 'Enter', submitting: 'Checking…', wrong: 'Wrong password, try again', locked: 'Too many attempts — wait a minute', networkErr: "Can't reach the panel, try again shortly", footer: 'This is the panel.password you set in config.json' },
+  ja: { code: '日', subtitle: '灯台守がここであなたを確かめます', placeholder: 'パスワードを入力', submit: '入室', submitting: '確認中…', wrong: 'パスワードが違います', locked: '試行回数が多すぎます。少し待ってください', networkErr: 'パネルに接続できません', footer: 'config.json に設定した panel.password です' },
+  de: { code: 'DE', subtitle: 'Der Leuchtturmwärter prüft deinen Schlüssel', placeholder: 'Passwort eingeben', submit: 'Eintreten', submitting: 'Prüfe…', wrong: 'Falsches Passwort, versuch es erneut', locked: 'Zu viele Versuche — bitte eine Minute warten', networkErr: 'Panel nicht erreichbar, später erneut versuchen', footer: 'Das ist dein panel.password aus config.json' },
+  ru: { code: 'RU', subtitle: 'Смотритель маяка проверяет ваш ключ', placeholder: 'Введите пароль', submit: 'Войти', submitting: 'Проверка…', wrong: 'Неверный пароль, попробуйте снова', locked: 'Слишком много попыток — подождите минуту', networkErr: 'Не удаётся связаться с панелью', footer: 'Это panel.password из config.json' }
+};
+
+let lang = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0,2);
+if (!I18N[lang]) lang = 'en';
+function t() { return I18N[lang]; }
+
+function renderLangSwitch() {
+  const el = document.getElementById('lang-switch');
+  el.innerHTML = Object.keys(I18N).map(code =>
+    `<button data-lang="${code}" class="${code === lang ? 'active' : ''}">${I18N[code].code}</button>`
+  ).join('');
+  el.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      lang = btn.dataset.lang;
+      localStorage.setItem('nodenanny-lang', lang);
+      renderAll();
+    });
+  });
+}
+
+function renderAll() {
+  document.documentElement.lang = lang;
+  renderLangSwitch();
+  document.getElementById('subtitle').textContent = t().subtitle;
+  document.getElementById('password').placeholder = t().placeholder;
+  document.getElementById('submit-btn').textContent = t().submit;
+  document.getElementById('footer-note').textContent = t().footer;
+}
+
+renderAll();
+
+const form = document.getElementById('login-form');
+const errEl = document.getElementById('error-msg');
+const btn = document.getElementById('submit-btn');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errEl.textContent = '';
+  btn.disabled = true;
+  btn.textContent = t().submitting;
+  const password = document.getElementById('password').value;
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    if (res.ok) {
+      window.location.href = '/';
+      return;
+    }
+    if (res.status === 429) {
+      errEl.textContent = t().locked;
+    } else {
+      errEl.textContent = t().wrong;
+    }
+  } catch (err) {
+    errEl.textContent = t().networkErr;
+  }
+  btn.disabled = false;
+  btn.textContent = t().submit;
+});
+</script>
+</body>
+</html>

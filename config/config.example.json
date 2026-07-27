@@ -1,0 +1,112 @@
+{
+  "language": "zh",
+  "node": {
+    "name": "my-node",
+    "checkHost": "127.0.0.1",
+    "checkPort": 443,
+    "serviceName": "xray",
+    "restartCommand": "systemctl restart xray",
+    "subscriptionUrl": ""
+  },
+  "monitor": {
+    "checkIntervalMinutes": 5,
+    "notifyCooldownMinutes": 30
+  },
+  "panel": {
+    "port": 8787,
+    "bindHost": "127.0.0.1",
+    "password": ""
+  },
+  "pool": {
+    "enabled": false,
+    "aggregatorDir": "/root/aggregator",
+    "fetchCommand": "python3 subscribe/collect.py -s",
+    "outputFile": "data/v2ray.txt",
+    "refreshIntervalHours": 6,
+    "maxNodes": 50,
+    "checkCandidateLimit": 250,
+    "aggregatorFetchTimeoutMs": 2700000,
+    "sourceWeighting": {
+      "aggregatorWeight": 1
+    },
+    "manualSources": [
+      { "id": "wangcai", "name": "旺财", "url": "https://shz.al/~WangCai", "fixed": true },
+      { "id": "ednovas", "name": "EdNovas小站", "url": "https://dpkj0402.indevs.in/x/tYgIl7Z" },
+      { "id": "shz-ybth", "name": "shz.al/ybth", "url": "https://shz.al/ybth" },
+      { "id": "freesub-permanent", "name": "FreeSub公益订阅(永久链接)", "url": "https://raw.githubusercontent.com/ovmvo/FreeSub/refs/heads/main/sub/permanent/mihomo.yaml" },
+      { "id": "nodebuf", "name": "nodebuf.com", "url": "https://nodebuf.com/files/public/cmre65stz0df5pi5wp4lvd0l7/download" }
+    ],
+    "discovery": {
+      "enabled": false,
+      "githubToken": "",
+      "topicQueries": ["v2ray-node", "free-nodes", "clash-config", "free-node", "vmess", "vless", "shadowsocks"],
+      "filenameQueries": ["v2ray.txt", "clash.yaml", "sub.txt"],
+      "recentPushedWithinDays": 30,
+      "maxResultsPerQuery": 30,
+      "scanIntervalHours": 168,
+      "candidateLimitPerSource": 20,
+      "maxSourcesPerRun": 30,
+      "sourceThrottleMs": 500,
+      "requestTimeoutMs": 8000,
+      "probeThrottleMs": 300
+    },
+    "checker": {
+      "enabled": true,
+      "concurrency": 3,
+      "singboxBinary": "sing-box",
+      "aliveUrl": "https://cp.cloudflare.com/generate_204",
+      "aliveTimeoutMs": 8000,
+      "speedTestUrl": "https://speed.cloudflare.com/__down?bytes=500000",
+      "speedMinKBps": 15,
+      "speedTimeoutMs": 20000,
+      "authenticTargetSampleSize": 3,
+      "authenticTimeoutMs": 12000
+    }
+  },
+  "usabilityCheck": {
+    "enabled": true,
+    "targetUrl": "http://cp.cloudflare.com/generate_204",
+    "xrayBinary": "xray",
+    "timeoutMs": 8000,
+    "suggestAfterFailures": 3,
+    "_comment_suggestAfterFailures": "二层可用性检测连续这么多次判定为down时，发一封仅建议、不重启的通知邮件(独立于下面ai.triggerAfterFailures那条TCP层的AI诊断触发线)。不会调用node.restartCommand。",
+    "autoRestartAfterFailures": 5,
+    "_comment_autoRestartAfterFailures": "v36新增(founder拍板):二层检测连续这么多次判定为down时，真的调用一次node.restartCommand自动重启本地代理(每次发作期只触发一次)。阈值必须比suggestAfterFailures更高，且需要单独配置node.restartCommand才会生效，没配置的话这条线自动跳过、不报错。"
+  },
+  "ai": {
+    "enabled": false,
+    "provider": "anthropic",
+    "apiKey": "",
+    "model": "",
+    "triggerAfterFailures": 3,
+    "language": "zh",
+    "_comment_provider": "provider可选: anthropic / openai / openai-compatible。选openai-compatible时(用于智谱/DeepSeek/通义等第三方或免费接口)必须额外填baseUrl和model，可选填apiPath(默认/v1/chat/completions)。发给openai-compatible这类第三方接口的内容会先脱敏(见ai-provider.js)，官方anthropic/openai不脱敏。",
+    "baseUrl": "",
+    "apiPath": "/v1/chat/completions"
+  },
+  "terminal": {
+    "enabled": false,
+    "password": "",
+    "_comment": "在线终端功能的二次密码，跟panel.password是两回事——面板登录之后打开终端前还要单独输入这个。留空且enabled=true会导致终端功能拒绝挂载。需要先 npm install ws node-pty 才能启用（node-pty是原生模块，需要本机有编译工具链）。"
+  },
+  "kbSync": {
+    "rawUrl": "",
+    "_comment": "知识库远程同步源，指向GitHub仓库里knowledge-base.json的raw地址。留空则知识库同步功能不可用，只能手动维护本地data/knowledge-base.json。同步只会落地到data/kb-staging.json，不会自动生效，需要在面板上看过diff手动确认合并。"
+  },
+  "wikiSync": {
+    "owner": "",
+    "repo": "",
+    "ref": "main",
+    "path": "data/wiki",
+    "_comment": "Wiki百科内容的远程同步源，owner/repo指向创始人维护的公开GitHub仓库，path是该仓库里对应data/wiki/的目录路径。owner或repo留空则同步功能不可用，只能手动维护本地data/wiki/。跟kbSync不同：这里是直接覆盖式镜像同步（面板上点检查更新->看diff->点确认覆盖，就会整体覆盖本地data/wiki/），不做本地修改保留，这是创始人明确确认过的方案。"
+  },
+  "smtp": {
+    "host": "smtp.example.com",
+    "port": 465,
+    "secure": true,
+    "user": "",
+    "pass": "",
+    "from": "NodeNanny <your@email.com>",
+    "to": ""
+  }
+}
