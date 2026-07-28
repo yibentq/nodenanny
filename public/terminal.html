@@ -285,6 +285,9 @@
   .memo-cmd-row button { background: var(--teal); border: none; color: #f1faf7; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap; font-family: inherit; }
   .memo-cmd-row button.secondary { background: var(--surface-2); color: var(--text); }
   .memo-cmd-status { font-size: 11.5px; color: var(--brass-soft); margin-left: 4px; }
+  .memo-section-label { font-size: 11.5px; color: var(--brass-soft); text-transform: uppercase; letter-spacing: 0.04em; margin: 14px 0 4px; padding-top: 8px; border-top: 1px dashed var(--hairline); }
+  .memo-section-label:first-child { margin-top: 0; padding-top: 0; border-top: none; }
+  .memo-entry.memo-auto-matched { background: rgba(200,150,62,0.06); border-radius: 4px; padding: 12px 10px; margin: 0 -10px 6px; border-bottom: none; }
 
   @media (max-width: 640px) {
     .term-page { padding: 10px; }
@@ -503,7 +506,45 @@
     const memoSearch = document.getElementById('memoSearch');
     const memoList = document.getElementById('memoList');
     let kbEntries = [];
-    const LANG = 'zh'; // 面板当前语言配置走后端config.language，这里先固定zh，后续可以从/api/status带出来跟随面板语言
+    // 最近一次故障事件里知识库命中的条目(完整对象，从kbEntries里按id挑出来，
+    // 这样能拿到title/verified/matchPatterns这些渲染需要、但/api/status里
+    // 事件本身不带的字段)。每次打开速查表都重新拉一次，不缓存太久——
+    // 故障状态是会变的，用户这次打开跟上次打开之间node可能已经好了。
+    let autoMatchedEntries = [];
+    // 超过这个时间的故障不再自动置顶：几天前修好的老问题不该被当成"正在发生"
+    // 摆在最前面误导用户。24小时是个先定的默认值，创始人如果觉得太长/太短
+    // 可以再改。
+    const AUTO_MATCH_RECENCY_MS = 24 * 60 * 60 * 1000;
+
+    async function loadAutoMatchedKb() {
+      try {
+        const resp = await fetch('/api/status');
+        const data = await resp.json();
+        const events = data.events || [];
+        const now = Date.now();
+        // /api/status返回的events已经是按时间倒序(store.js用unshift写入)，
+        // 找到第一条(=最新一条)带非空kb字段、且没超出时间窗口的故障事件即可。
+        const recentKbEvent = events.find((e) => {
+          if (!e.params || !Array.isArray(e.params.kb) || e.params.kb.length === 0) return false;
+          const eventTime = new Date(e.time).getTime();
+          return Number.isFinite(eventTime) && (now - eventTime) <= AUTO_MATCH_RECENCY_MS;
+        });
+        if (!recentKbEvent) {
+          autoMatchedEntries = [];
+          return;
+        }
+        const matchedIds = new Set(recentKbEvent.params.kb.map((k) => k.id));
+        autoMatchedEntries = kbEntries.filter((entry) => matchedIds.has(entry.id));
+      } catch (err) {
+        // 拉取失败就退回普通全量列表，不影响速查表本身可用——自动匹配是锦上添花，
+        // 不是速查表能不能用的前提条件。
+        autoMatchedEntries = [];
+      }
+    }
+    // 跟主面板(index.html)/wiki页(wiki.html)复用同一套 localStorage 键(nodenanny-lang)，不支持的语言回退到zh
+    const SUPPORTED_LANGS = ['zh', 'en', 'ja', 'de', 'ru'];
+    let LANG = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0, 2);
+    if (!SUPPORTED_LANGS.includes(LANG)) LANG = 'zh';
 
     function escapeHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -515,8 +556,47 @@
       return `<span class="risk-badge ${cls}">${label}</span>`;
     }
 
+    // 单条知识库条目的渲染逻辑，抽成独立函数，供下面"自动匹配置顶区块"和
+    // "普通搜索列表"共用，避免两处渲染逻辑长出两份、以后改一处忘了改另一处。
+    function renderEntry(entry, opts) {
+      const verified = entry.verified === true;
+      const explain = (entry.explanation && entry.explanation[LANG]) || '';
+      const cmdRows = (entry.fixCommands || []).map((cmd, idx) => {
+        const cmdId = `${entry.id}__${idx}`;
+        const actionBtn = verified
+          ? `<button data-cmd-id="${cmdId}" class="memo-run-btn">填入终端</button>`
+          : `<button data-cmd-id="${cmdId}" class="memo-copy-btn secondary">复制（未经人工确认，不能一键执行）</button>`;
+        return `<div class="memo-cmd-row">
+          <code id="code-${cmdId}">${escapeHtml(cmd)}</code>
+          ${actionBtn}
+          <span class="memo-cmd-status" id="status-${cmdId}"></span>
+        </div>`;
+      }).join('');
+      const cls = (opts && opts.autoMatched) ? 'memo-entry memo-auto-matched' : 'memo-entry';
+      return `<div class="${cls}">
+        <div class="memo-title">${escapeHtml(entry.title)} ${riskBadge(entry.riskLevel)} ${verified ? '' : riskBadge('copy-only')}</div>
+        <div class="memo-explain">${escapeHtml(explain)}</div>
+        ${cmdRows}
+      </div>`;
+    }
+
     function renderMemoList(filterText) {
       const q = (filterText || '').trim().toLowerCase();
+
+      // 没有搜索词、且有最近故障自动匹配到的条目时：把这些条目置顶展示，
+      // 下面接着列出完整知识库列表（去重，不重复出现）。用户一旦开始搜索
+      // (q非空)，就回到纯搜索模式——搜索是用户主动在找别的东西，不该被置顶
+      // 逻辑打扰。
+      if (!q && autoMatchedEntries.length > 0) {
+        const pinnedIds = new Set(autoMatchedEntries.map((e) => e.id));
+        const rest = kbEntries.filter((e) => !pinnedIds.has(e.id));
+        memoList.innerHTML =
+          `<div class="memo-section-label">根据最近故障自动匹配</div>` +
+          autoMatchedEntries.map((e) => renderEntry(e, { autoMatched: true })).join('') +
+          (rest.length ? `<div class="memo-section-label">全部知识库条目</div>` + rest.map((e) => renderEntry(e)).join('') : '');
+        return;
+      }
+
       const filtered = !q ? kbEntries : kbEntries.filter((e) => {
         const hay = `${e.title} ${(e.explanation && e.explanation[LANG]) || ''} ${(e.matchPatterns || []).join(' ')}`.toLowerCase();
         return hay.includes(q);
@@ -525,26 +605,7 @@
         memoList.innerHTML = '<div style="color:#8a8f8a;padding:12px 0;">没有匹配的知识库条目</div>';
         return;
       }
-      memoList.innerHTML = filtered.map((entry) => {
-        const verified = entry.verified === true;
-        const explain = (entry.explanation && entry.explanation[LANG]) || '';
-        const cmdRows = (entry.fixCommands || []).map((cmd, idx) => {
-          const cmdId = `${entry.id}__${idx}`;
-          const actionBtn = verified
-            ? `<button data-cmd-id="${cmdId}" class="memo-run-btn">填入终端</button>`
-            : `<button data-cmd-id="${cmdId}" class="memo-copy-btn secondary">复制（未经人工确认，不能一键执行）</button>`;
-          return `<div class="memo-cmd-row">
-            <code id="code-${cmdId}">${escapeHtml(cmd)}</code>
-            ${actionBtn}
-            <span class="memo-cmd-status" id="status-${cmdId}"></span>
-          </div>`;
-        }).join('');
-        return `<div class="memo-entry">
-          <div class="memo-title">${escapeHtml(entry.title)} ${riskBadge(entry.riskLevel)} ${verified ? '' : riskBadge('copy-only')}</div>
-          <div class="memo-explain">${escapeHtml(explain)}</div>
-          ${cmdRows}
-        </div>`;
-      }).join('');
+      memoList.innerHTML = filtered.map((e) => renderEntry(e)).join('');
 
       // 事件委托：一次性绑定，避免每次搜索重新渲染都重复addEventListener
     }
@@ -637,6 +698,7 @@
           return;
         }
       }
+      await loadAutoMatchedKb();
       renderMemoList(memoSearch.value);
     }
 
