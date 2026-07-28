@@ -270,6 +270,14 @@ function formatTime(iso) {
   return new Date(iso).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 }
 
+// KB条目的title从纯字符串改成了{zh,en,ja,de,ru}多语言对象（跟explanation结构一致）；
+// 兼容旧数据/还没跟进的远程同步条目仍是字符串的情况，直接原样返回。
+function localizedTitle(title, lang) {
+  if (!title) return '';
+  if (typeof title === 'string') return title;
+  return title[lang] || title.zh || title.en || '';
+}
+
 // 从最近事件里去重收集kb建议——同一个kb条目在时间线里出现多次（比如反复触发
 // usability_restart_suggested）只展示一次，避免报告里重复的大段文字。
 function collectKbSuggestions(timelineEvents, lang) {
@@ -279,7 +287,8 @@ function collectKbSuggestions(timelineEvents, lang) {
     for (const entry of hits) {
       if (!entry || !entry.id || seen.has(entry.id)) continue;
       const explanation = (entry.explanation && (entry.explanation[lang] || entry.explanation.en)) || '';
-      seen.set(entry.id, { title: entry.title || entry.id, explanation, riskLevel: entry.riskLevel });
+      const title = localizedTitle(entry.title, lang) || entry.id;
+      seen.set(entry.id, { title, explanation, riskLevel: entry.riskLevel });
     }
   }
   return Array.from(seen.values());

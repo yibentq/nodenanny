@@ -666,6 +666,14 @@
     if (!SUPPORTED_LANGS.includes(LANG)) LANG = 'zh';
     function tt() { return TERM_I18N[LANG]; }
 
+    // KB条目的title从纯字符串改成了{zh,en,ja,de,ru}多语言对象（跟explanation结构一致）；
+    // 兼容远程同步/AI生成等还没来得及跟进的条目仍是字符串的情况，直接原样返回。
+    function localizedTitle(title) {
+      if (!title) return '';
+      if (typeof title === 'string') return title;
+      return title[LANG] || title.zh || title.en || '';
+    }
+
     // 把静态外壳文案(标题/按钮/占位提示/页脚等)按当前LANG重新渲染一遍。
     // 打开页面时调用一次；切换语言时也要重新调用，否则按钮上的字不会跟着变。
     function applyStaticText() {
@@ -893,7 +901,7 @@
       }).join('');
       const cls = (opts && opts.autoMatched) ? 'memo-entry memo-auto-matched' : 'memo-entry';
       return `<div class="${cls}">
-        <div class="memo-title">${escapeHtml(entry.title)} ${riskBadge(entry.riskLevel)} ${verified ? '' : riskBadge('copy-only')}</div>
+        <div class="memo-title">${escapeHtml(localizedTitle(entry.title))} ${riskBadge(entry.riskLevel)} ${verified ? '' : riskBadge('copy-only')}</div>
         <div class="memo-explain">${escapeHtml(explain)}</div>
         ${cmdRows}
       </div>`;
@@ -917,7 +925,7 @@
       }
 
       const filtered = !q ? kbEntries : kbEntries.filter((e) => {
-        const hay = `${e.title} ${(e.explanation && e.explanation[LANG]) || ''} ${(e.matchPatterns || []).join(' ')}`.toLowerCase();
+        const hay = `${localizedTitle(e.title)} ${(e.explanation && e.explanation[LANG]) || ''} ${(e.matchPatterns || []).join(' ')}`.toLowerCase();
         return hay.includes(q);
       });
       if (!filtered.length) {

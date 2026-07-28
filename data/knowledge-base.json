@@ -2,7 +2,13 @@
   "entries": [
     {
       "id": "xray-service-down",
-      "title": "xray/sing-box 服务进程退出",
+      "title": {
+        "zh": "xray/sing-box 服务进程退出",
+        "en": "xray/sing-box service process exited",
+        "ja": "xray/sing-boxサービスプロセスが終了",
+        "de": "xray/sing-box-Dienstprozess beendet",
+        "ru": "Процесс службы xray/sing-box завершился"
+      },
       "matchPatterns": [
         "Failed to start",
         "xray\\.service.*failed",
@@ -24,7 +30,13 @@
     },
     {
       "id": "tls-cert-expiring-soon",
-      "title": "TLS证书即将过期",
+      "title": {
+        "zh": "TLS证书即将过期",
+        "en": "TLS certificate expiring soon",
+        "ja": "TLS証明書の有効期限が近い",
+        "de": "TLS-Zertifikat läuft bald ab",
+        "ru": "Срок действия TLS-сертификата скоро истекает"
+      },
       "matchPatterns": [
         "certificate.*expir",
         "x509: certificate has expired"
@@ -46,7 +58,13 @@
     },
     {
       "id": "iptables-blocking-port",
-      "title": "iptables规则疑似封锁了代理端口",
+      "title": {
+        "zh": "iptables规则疑似封锁了代理端口",
+        "en": "iptables rules may be blocking the proxy port",
+        "ja": "iptablesルールがプロキシポートをブロックしている疑い",
+        "de": "iptables-Regeln blockieren vermutlich den Proxy-Port",
+        "ru": "Правила iptables, возможно, блокируют порт прокси"
+      },
       "matchPatterns": [
         "connection refused.*:(443|8443|2053)\\b",
         "iptables.*DROP"
@@ -67,7 +85,13 @@
     },
     {
       "id": "disk-full-log-write-fail",
-      "title": "磁盘空间已满导致日志/服务异常",
+      "title": {
+        "zh": "磁盘空间已满导致日志/服务异常",
+        "en": "Disk full, causing log/service failures",
+        "ja": "ディスク満杯によるログ/サービス異常",
+        "de": "Voller Speicherplatz verursacht Protokoll-/Dienstfehler",
+        "ru": "Диск заполнен, что вызывает сбои журнала/службы"
+      },
       "matchPatterns": [
         "No space left on device",
         "disk.*full",
@@ -89,7 +113,13 @@
     },
     {
       "id": "vmess-ws-mux-mismatch",
-      "title": "vmess+ws 客户端反复掉线（疑似mux/分片参数不匹配）",
+      "title": {
+        "zh": "vmess+ws 客户端反复掉线（疑似mux/分片参数不匹配）",
+        "en": "vmess+ws client repeatedly disconnects (suspected mux/fragment parameter mismatch)",
+        "ja": "vmess+wsクライアントが繰り返し切断（mux/分割パラメータの不一致の疑い）",
+        "de": "vmess+ws-Client trennt wiederholt die Verbindung (vermutete mux-/Fragment-Parameter-Abweichung)",
+        "ru": "Клиент vmess+ws постоянно отключается (предположительно несоответствие параметров mux/фрагментации)"
+      },
       "matchPatterns": [
         "websocket: bad handshake",
         "unexpected EOF.*vmess"
@@ -108,7 +138,13 @@
     },
     {
       "id": "usability-target-must-be-http",
-      "title": "二层可用性检测目标配置成了https(检测器只支持http)",
+      "title": {
+        "zh": "二层可用性检测目标配置成了https(检测器只支持http)",
+        "en": "Layer-2 usability check target configured as https (checker only supports http)",
+        "ja": "二層可用性チェックの対象がhttpsに設定されている（チェッカーはhttpのみ対応）",
+        "de": "Layer-2-Usability-Check-Ziel ist auf https konfiguriert (Checker unterstützt nur http)",
+        "ru": "Цель проверки работоспособности второго уровня настроена на https (модуль поддерживает только http)"
+      },
       "codes": [
         "USABILITY_TARGET_MUST_BE_HTTP"
       ],
@@ -129,7 +165,13 @@
     },
     {
       "id": "usability-checker-environment-issue",
-      "title": "二层检测本机环境问题(拉不起临时客户端/端口冲突)",
+      "title": {
+        "zh": "二层检测本机环境问题(拉不起临时客户端/端口冲突)",
+        "en": "Layer-2 check local environment issue (temporary client failed to start / port conflict)",
+        "ja": "二層チェックのローカル環境問題（一時クライアントの起動失敗/ポート競合）",
+        "de": "Lokales Umgebungsproblem bei der Layer-2-Prüfung (temporärer Client startete nicht / Portkonflikt)",
+        "ru": "Проблема локальной среды при проверке второго уровня (временный клиент не запустился / конфликт портов)"
+      },
       "codes": [
         "USABILITY_XRAY_SPAWN_FAILED",
         "USABILITY_NO_FREE_PORT",
@@ -152,7 +194,13 @@
     },
     {
       "id": "usability-node-actually-unreachable",
-      "title": "二层检测判定节点实际不可用(隧道通了但目标连不上/超时/状态码不对)",
+      "title": {
+        "zh": "二层检测判定节点实际不可用(隧道通了但目标连不上/超时/状态码不对)",
+        "en": "Layer-2 check found the node genuinely unreachable (tunnel up but target unreachable/timed out/wrong status code)",
+        "ja": "二層チェックによりノードが実際に到達不能と判定（トンネルは確立したが対象に到達不可/タイムアウト/ステータスコード不正）",
+        "de": "Layer-2-Prüfung: Knoten tatsächlich unerreichbar (Tunnel steht, aber Ziel nicht erreichbar/Timeout/falscher Statuscode)",
+        "ru": "Проверка второго уровня выявила, что узел действительно недоступен (туннель установлен, но цель недоступна/тайм-аут/неверный код состояния)"
+      },
       "codes": [
         "USABILITY_BAD_STATUS_CODE",
         "USABILITY_PROBE_TIMEOUT_CONNECT",
@@ -174,7 +222,13 @@
     },
     {
       "id": "usability-detection-facility-issue",
-      "title": "二层检测手段本身出问题(不代表节点故障)",
+      "title": {
+        "zh": "二层检测手段本身出问题(不代表节点故障)",
+        "en": "Layer-2 detection facility itself has a problem (does not indicate a node failure)",
+        "ja": "二層検出設備自体の問題（ノード障害を意味しない）",
+        "de": "Problem der Layer-2-Erkennungseinrichtung selbst (kein Hinweis auf Knotenausfall)",
+        "ru": "Проблема самого средства обнаружения второго уровня (не означает сбой узла)"
+      },
       "codes": [
         "USABILITY_PROBE_TIMEOUT_GREETING",
         "USABILITY_PROBE_TIMEOUT_LEGACY",
@@ -202,7 +256,13 @@
     },
     {
       "id": "usability-probe-response-hijacked-or-malformed",
-      "title": "目标返回了非HTTP格式的响应(疑似被劫持/篡改)",
+      "title": {
+        "zh": "目标返回了非HTTP格式的响应(疑似被劫持/篡改)",
+        "en": "Target returned a non-HTTP-format response (suspected hijacking/tampering)",
+        "ja": "対象が非HTTP形式のレスポンスを返した（ハイジャック/改ざんの疑い）",
+        "de": "Ziel lieferte eine Antwort in nicht-HTTP-Format (vermutetes Hijacking/Manipulation)",
+        "ru": "Цель вернула ответ не в формате HTTP (подозрение на перехват/подмену)"
+      },
       "codes": [
         "USABILITY_PROBE_BAD_RESPONSE_FORMAT"
       ],
@@ -221,7 +281,13 @@
     },
     {
       "id": "pool-checker-environment-issue",
-      "title": "节点池检测本机环境问题(拉不起sing-box临时客户端/端口冲突)",
+      "title": {
+        "zh": "节点池检测本机环境问题(拉不起sing-box临时客户端/端口冲突)",
+        "en": "Pool check local environment issue (temporary sing-box client failed to start / port conflict)",
+        "ja": "ノードプールチェックのローカル環境問題（sing-box一時クライアントの起動失敗/ポート競合）",
+        "de": "Lokales Umgebungsproblem bei der Pool-Prüfung (temporärer sing-box-Client startete nicht / Portkonflikt)",
+        "ru": "Проблема локальной среды при проверке пула (временный клиент sing-box не запустился / конфликт портов)"
+      },
       "codes": [
         "POOL_SINGBOX_SPAWN_FAILED",
         "POOL_SINGBOX_PORT_NOT_READY",
@@ -244,7 +310,13 @@
     },
     {
       "id": "pool-node-actually-unreachable",
-      "title": "节点池检测发现候选节点真的不可用(隧道通了但目标连不上/超时/响应异常)",
+      "title": {
+        "zh": "节点池检测发现候选节点真的不可用(隧道通了但目标连不上/超时/响应异常)",
+        "en": "Pool check found the candidate node genuinely unreachable (tunnel up but target unreachable/timed out/abnormal response)",
+        "ja": "プールチェックにより候補ノードが実際に到達不能と判明（トンネルは確立したが対象に到達不可/タイムアウト/レスポンス異常）",
+        "de": "Pool-Prüfung: Kandidatenknoten tatsächlich unerreichbar (Tunnel steht, aber Ziel nicht erreichbar/Timeout/abnormale Antwort)",
+        "ru": "Проверка пула выявила, что узел-кандидат действительно недоступен (туннель установлен, но цель недоступна/тайм-аут/аномальный ответ)"
+      },
       "codes": [
         "POOL_ALIVE_BAD_STATUS_CODE",
         "POOL_SPEED_BAD_STATUS_CODE",
@@ -271,7 +343,13 @@
     },
     {
       "id": "pool-checker-detection-facility-issue",
-      "title": "节点池检测手段本身问题(不代表候选节点故障)",
+      "title": {
+        "zh": "节点池检测手段本身问题(不代表候选节点故障)",
+        "en": "Pool detection facility itself has a problem (does not indicate a candidate node failure)",
+        "ja": "ノードプール検出設備自体の問題（候補ノード障害を意味しない）",
+        "de": "Problem der Pool-Erkennungseinrichtung selbst (kein Hinweis auf Kandidatenknotenausfall)",
+        "ru": "Проблема самого средства обнаружения пула (не означает сбой узла-кандидата)"
+      },
       "codes": [
         "POOL_PROBE_TIMEOUT_CONNECTING",
         "POOL_PROBE_TIMEOUT_GREETING",
@@ -299,7 +377,13 @@
     },
     {
       "id": "pool-probe-response-hijacked-or-malformed",
-      "title": "节点池检测响应格式异常或跟目标不符(疑似劫持/伪造节点)",
+      "title": {
+        "zh": "节点池检测响应格式异常或跟目标不符(疑似劫持/伪造节点)",
+        "en": "Pool check response format abnormal or mismatched with target (suspected hijacking/spoofed node)",
+        "ja": "プールチェックのレスポンス形式が異常、または対象と不一致（ハイジャック/なりすましノードの疑い）",
+        "de": "Pool-Prüfungsantwort hat abnormales Format oder stimmt nicht mit dem Ziel überein (vermutetes Hijacking/gefälschter Knoten)",
+        "ru": "Формат ответа при проверке пула аномален или не соответствует цели (подозрение на перехват/поддельный узел)"
+      },
       "codes": [
         "POOL_PROBE_BAD_RESPONSE_FORMAT",
         "POOL_AUTHENTIC_TARGET_MISMATCH"
@@ -319,7 +403,13 @@
     },
     {
       "id": "pool-speed-below-threshold",
-      "title": "节点池测速通过连通但吞吐量低于阈值",
+      "title": {
+        "zh": "节点池测速通过连通但吞吐量低于阈值",
+        "en": "Pool speed test connected successfully but throughput below threshold",
+        "ja": "プール速度測定は接続成功だがスループットが閾値未満",
+        "de": "Pool-Geschwindigkeitstest erfolgreich verbunden, aber Durchsatz unter Schwellenwert",
+        "ru": "Проверка скорости пула прошла успешно, но пропускная способность ниже порога"
+      },
       "codes": [
         "POOL_SPEED_BELOW_THRESHOLD"
       ],
@@ -340,7 +430,13 @@
     },
     {
       "id": "pool-unsupported-protocol",
-      "title": "候选节点协议无法识别/暂不支持解析",
+      "title": {
+        "zh": "候选节点协议无法识别/暂不支持解析",
+        "en": "Candidate node protocol unrecognized / not yet supported for parsing",
+        "ja": "候補ノードのプロトコルが認識不能、または解析未対応",
+        "de": "Kandidatenknoten-Protokoll nicht erkannt / Parsing noch nicht unterstützt",
+        "ru": "Протокол узла-кандидата не распознан / разбор пока не поддерживается"
+      },
       "codes": [
         "POOL_UNSUPPORTED_PROTOCOL"
       ],
@@ -361,7 +457,13 @@
     },
     {
       "id": "github-discovery-token-missing",
-      "title": "GitHub候选来源发现:文件名搜索被跳过(缺少githubToken)",
+      "title": {
+        "zh": "GitHub候选来源发现:文件名搜索被跳过(缺少githubToken)",
+        "en": "GitHub candidate-source discovery: filename search skipped (missing githubToken)",
+        "ja": "GitHub候補ソース発見：ファイル名検索がスキップされた（githubToken未設定）",
+        "de": "GitHub-Kandidatenquellenerkennung: Dateinamensuche übersprungen (githubToken fehlt)",
+        "ru": "Обнаружение источников-кандидатов GitHub: поиск по имени файла пропущен (отсутствует githubToken)"
+      },
       "matchPatterns": [
         "GitHub 代码搜索接口要求必须认证",
         "githubToken"

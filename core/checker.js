@@ -9,8 +9,11 @@ const ai = require('./ai-provider');
 const kbManager = require('./kb-manager');
 const { runUsabilityCheck } = require('./usability-check');
 
-// 给一个错误code查知识库，返回精简后的条目数组(id/explanation/fixCommands/riskLevel)，
-// 跟pool-events.js里attachKbMatches的取舍逻辑保持一致——只留前端/邮件实际会用到的字段。
+// 给一个错误code查知识库，返回精简后的条目数组(id/title/explanation/fixCommands/riskLevel)，
+// 跟pool-events.js里matchKbForResult的取舍逻辑保持一致——只留前端/邮件实际会用到的字段。
+// title这里转发完整的{zh,en,ja,de,ru}对象（不在这里挑语言），由消费方(terminal.html/
+// failure-report.js)各自按自己的语言上下文取值——之前这里漏转发了title，导致
+// failure-report.js的KB建议列表在真实事件上永远退化成显示entry.id，这次一并补上。
 // contextKey这里随便给个带时间戳的值就行：这条路径本来就只在"状态发生变化"或
 // "连续失败刚好达到阈值"这类低频时机才会调用，不存在同一批候选短时间内重复触发、
 // 需要靠contextKey互相区分的场景（那是pool-events那边的问题）。
@@ -18,7 +21,7 @@ async function matchKbForEvent(code) {
   if (!code) return [];
   try {
     const hits = await kbManager.matchCode(code, { contextKey: `usability:${Date.now()}` });
-    return hits.map((entry) => ({ id: entry.id, explanation: entry.explanation, fixCommands: entry.fixCommands, riskLevel: entry.riskLevel }));
+    return hits.map((entry) => ({ id: entry.id, title: entry.title, explanation: entry.explanation, fixCommands: entry.fixCommands, riskLevel: entry.riskLevel }));
   } catch (err) {
     console.error('[checker] 二层检测事件的知识库匹配失败，本条不带建议：', err.message);
     return [];

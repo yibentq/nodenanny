@@ -78,15 +78,16 @@ function describeLink(link) {
   }
 }
 
-// 给一个错误code查知识库，返回精简后的条目数组(id/explanation/fixCommands/riskLevel)，
+// 给一个错误code查知识库，返回精简后的条目数组(id/title/explanation/fixCommands/riskLevel)，
 // 取舍逻辑、字段跟checker.js里的matchKbForEvent保持一致(只留前端实际会用到的字段)。
+// title同样转发完整的多语言对象，理由跟checker.js那边一致。
 // contextKey用"轮次时间+候选序号"拼出来，保证同一轮里几十个候选即使code相同也不会
 // 被kb-manager.matchCode那个为"高频重复触发"设计的60秒防刷缓存互相挤掉。
 async function matchKbForResult(code, contextKey) {
   if (!code) return [];
   try {
     const hits = await kbManager.matchCode(code, { contextKey });
-    return hits.map((entry) => ({ id: entry.id, explanation: entry.explanation, fixCommands: entry.fixCommands, riskLevel: entry.riskLevel }));
+    return hits.map((entry) => ({ id: entry.id, title: entry.title, explanation: entry.explanation, fixCommands: entry.fixCommands, riskLevel: entry.riskLevel }));
   } catch (err) {
     console.error('[pool-events] 知识库匹配失败，本条不带建议：', err.message);
     return [];
