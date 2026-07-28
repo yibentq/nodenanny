@@ -420,7 +420,7 @@
 <!-- Wiki同步确认弹窗：镜像覆盖式同步，点"确认覆盖"前必须先看过这里的diff清单。 -->
 <div class="modal-overlay" id="syncModal">
   <div class="modal-box">
-    <div class="modal-head">Wiki内容更新确认</div>
+    <div class="modal-head" id="syncModalHead">Wiki内容更新确认</div>
     <div class="modal-body" id="syncModalBody">检查中…</div>
     <div class="modal-foot">
       <button class="modal-btn" id="syncCancelBtn">取消</button>
@@ -446,13 +446,13 @@
 //   2. DOMPurify.sanitize() 再清洗一遍，防止第三方教程原文里混入的<script>等内容
 //      被当成可执行HTML插入页面——wiki-manager.js文件头注释里已经说明过这条设计原则，
 //      这里是它在前端真正落地的地方。
-// ---------- 界面文案五语言字典（本轮新增） ----------
+// ---------- 界面文案五语言字典 ----------
 // 跟主面板(index.html)复用同一套 localStorage 键(nodenanny-lang)和语言代码
 // (zh/en/ja/de/ru)，切主面板语言后打开wiki会自动跟随。
-// 只覆盖"界面壳"文案（导航、搜索框、按钮、提示语这些），Wiki同步(syncModal)
-// 那部分的详细diff/错误文案暂时保持中文——这部分是管理员向远程仓库同步内容用的
-// 低频功能，且当前config.json里wikiSync.owner/repo默认为空、从未被真正启用过，
-// 这次不在这个功能上花翻译成本，如实记录，不是遗漏。
+// Wiki同步(syncModal)的diff清单/错误提示/进度文案，原先因为wikiSync从未真正
+// 启用而暂缓翻译；现在wikiSync已经配置并投入实际使用（config.json里
+// wikiSync.owner/repo已填好），founder决定现在补上这部分翻译，跟界面壳
+// 文案统一放进同一个字典。
 const WIKI_I18N = {
   zh: {
     code: '中',
@@ -476,6 +476,23 @@ const WIKI_I18N = {
     updatedAt: (p) => `更新于 ${p.date}`,
     unavailableNotice: (p) => `此文章暂无${p.langName}译文，以下显示中文原文。`,
     langNames: { zh: '中文', en: '英文', ja: '日文', de: '德文', ru: '俄文' },
+    syncModalHead: 'Wiki内容更新确认',
+    syncCancelBtn: '取消',
+    syncApplyBtn: '确认覆盖',
+    syncApplying: '覆盖中…',
+    syncChecking: '正在联系远程仓库，检查是否有更新…',
+    syncErrNotConfigured: '还没有配置远程同步仓库（config.json 里的 wikiSync.owner/repo 为空），请先联系管理员配置。',
+    syncErrPathEmpty: '远程仓库里指定路径下没有找到任何文件，请确认仓库地址和路径配置是否正确。',
+    syncErrTruncated: '远程仓库文件太多导致列表被截断，本次无法安全比对，请联系管理员处理。',
+    syncErrGeneric: (p) => `检查更新失败：${p.error || '未知错误'}`,
+    syncUpToDate: (p) => `当前已是最新（共 ${p.total} 个文件），没有需要更新的内容。`,
+    diffAdded: '新增文件',
+    diffChanged: '内容变化',
+    diffRemoved: '远程已删除（确认后本地也会删除）',
+    syncUpdateDetectedIntro: '检测到远程有更新。这是<b>直接覆盖式镜像同步</b>：点“确认覆盖”后，下面列出的文件会直接用远程最新内容覆盖本地（如果你自己手动改过其中某个页面，改动会被覆盖，无法保留）。',
+    syncRequestFailed: (p) => `请求失败：${p.msg}`,
+    syncApplySuccess: (p) => `已完成：新增/更新 ${p.downloaded} 个文件，删除 ${p.removed} 个文件。`,
+    syncApplyPartialFailIntro: '部分文件同步失败，已同步的部分仍然生效，失败的文件下次检查更新时会重试：',
   },
   en: {
     code: 'EN',
@@ -499,6 +516,23 @@ const WIKI_I18N = {
     updatedAt: (p) => `Updated ${p.date}`,
     unavailableNotice: (p) => `This article has no ${p.langName} translation yet. Showing the original Chinese version below.`,
     langNames: { zh: 'Chinese', en: 'English', ja: 'Japanese', de: 'German', ru: 'Russian' },
+    syncModalHead: 'Confirm Wiki Content Update',
+    syncCancelBtn: 'Cancel',
+    syncApplyBtn: 'Confirm Overwrite',
+    syncApplying: 'Overwriting…',
+    syncChecking: 'Contacting the remote repository, checking for updates…',
+    syncErrNotConfigured: 'No remote sync repository is configured yet (wikiSync.owner/repo in config.json is empty). Please ask the administrator to configure it.',
+    syncErrPathEmpty: 'No files were found under the specified path in the remote repository. Please confirm the repository address and path are correct.',
+    syncErrTruncated: 'The remote repository has too many files and the listing was truncated, so it cannot be safely compared this time. Please contact the administrator.',
+    syncErrGeneric: (p) => `Failed to check for updates: ${p.error || 'unknown error'}`,
+    syncUpToDate: (p) => `Already up to date (${p.total} files total), nothing needs updating.`,
+    diffAdded: 'Added files',
+    diffChanged: 'Changed content',
+    diffRemoved: 'Removed remotely (will also be deleted locally once confirmed)',
+    syncUpdateDetectedIntro: 'An update was detected remotely. This is a <b>direct overwrite mirror sync</b>: after clicking "Confirm Overwrite", the files listed below will be overwritten with the latest remote content (if you manually edited any of these pages, those changes will be overwritten and cannot be kept).',
+    syncRequestFailed: (p) => `Request failed: ${p.msg}`,
+    syncApplySuccess: (p) => `Done: ${p.downloaded} file(s) added/updated, ${p.removed} file(s) removed.`,
+    syncApplyPartialFailIntro: 'Some files failed to sync. The ones that succeeded still take effect; the failed ones will be retried on the next check:',
   },
   ja: {
     code: '日',
@@ -522,6 +556,23 @@ const WIKI_I18N = {
     updatedAt: (p) => `更新日：${p.date}`,
     unavailableNotice: (p) => `この記事にはまだ${p.langName}訳がありません。以下は中国語の原文です。`,
     langNames: { zh: '中国語', en: '英語', ja: '日本語', de: 'ドイツ語', ru: 'ロシア語' },
+    syncModalHead: 'Wikiコンテンツ更新の確認',
+    syncCancelBtn: 'キャンセル',
+    syncApplyBtn: '上書きを確認',
+    syncApplying: '上書き中…',
+    syncChecking: 'リモートリポジトリに接続して更新を確認しています…',
+    syncErrNotConfigured: 'リモート同期リポジトリがまだ設定されていません（config.jsonのwikiSync.owner/repoが空です）。管理者に設定を依頼してください。',
+    syncErrPathEmpty: 'リモートリポジトリの指定パス配下にファイルが見つかりませんでした。リポジトリのアドレスとパス設定を確認してください。',
+    syncErrTruncated: 'リモートリポジトリのファイル数が多すぎて一覧が切り詰められたため、今回は安全に比較できません。管理者に連絡してください。',
+    syncErrGeneric: (p) => `更新の確認に失敗しました：${p.error || '不明なエラー'}`,
+    syncUpToDate: (p) => `すでに最新です（合計${p.total}ファイル）。更新の必要はありません。`,
+    diffAdded: '新規ファイル',
+    diffChanged: '内容変更',
+    diffRemoved: 'リモートで削除済み（確認するとローカルからも削除されます）',
+    syncUpdateDetectedIntro: 'リモートに更新が見つかりました。これは<b>直接上書き方式のミラー同期</b>です：「上書きを確認」をクリックすると、以下に表示されたファイルがリモートの最新内容でそのまま上書きされます（いずれかのページを手動で編集していた場合、その変更は上書きされ復元できません）。',
+    syncRequestFailed: (p) => `リクエストに失敗しました：${p.msg}`,
+    syncApplySuccess: (p) => `完了しました：${p.downloaded}件のファイルを追加/更新、${p.removed}件を削除しました。`,
+    syncApplyPartialFailIntro: '一部のファイルの同期に失敗しました。成功した分はそのまま有効です。失敗したファイルは次回の更新確認時に再試行されます：',
   },
   de: {
     code: 'DE',
@@ -545,6 +596,23 @@ const WIKI_I18N = {
     updatedAt: (p) => `Aktualisiert am ${p.date}`,
     unavailableNotice: (p) => `Für diesen Artikel gibt es noch keine ${p.langName}-Übersetzung. Es wird die chinesische Originalversion angezeigt.`,
     langNames: { zh: 'Chinesisch', en: 'Englisch', ja: 'Japanisch', de: 'Deutsch', ru: 'Russisch' },
+    syncModalHead: 'Wiki-Inhaltsaktualisierung bestätigen',
+    syncCancelBtn: 'Abbrechen',
+    syncApplyBtn: 'Überschreiben bestätigen',
+    syncApplying: 'Wird überschrieben…',
+    syncChecking: 'Verbindung zum Remote-Repository wird hergestellt, Updates werden geprüft…',
+    syncErrNotConfigured: 'Es ist noch kein Remote-Sync-Repository konfiguriert (wikiSync.owner/repo in config.json ist leer). Bitte den Administrator um Konfiguration bitten.',
+    syncErrPathEmpty: 'Im angegebenen Pfad des Remote-Repositorys wurden keine Dateien gefunden. Bitte Repository-Adresse und Pfad-Konfiguration prüfen.',
+    syncErrTruncated: 'Das Remote-Repository hat zu viele Dateien, sodass die Liste abgeschnitten wurde und diesmal nicht sicher verglichen werden kann. Bitte den Administrator kontaktieren.',
+    syncErrGeneric: (p) => `Update-Prüfung fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
+    syncUpToDate: (p) => `Bereits aktuell (insgesamt ${p.total} Dateien), nichts zu aktualisieren.`,
+    diffAdded: 'Neue Dateien',
+    diffChanged: 'Geänderter Inhalt',
+    diffRemoved: 'Remote entfernt (wird nach Bestätigung auch lokal gelöscht)',
+    syncUpdateDetectedIntro: 'Es wurde ein Update auf dem Remote-Server erkannt. Dies ist eine <b>direkte, überschreibende Spiegelsynchronisierung</b>: Nach Klick auf "Überschreiben bestätigen" werden die unten aufgeführten Dateien direkt mit dem neuesten Remote-Inhalt überschrieben (falls du eine dieser Seiten manuell bearbeitet hast, gehen diese Änderungen dabei verloren und können nicht erhalten werden).',
+    syncRequestFailed: (p) => `Anfrage fehlgeschlagen: ${p.msg}`,
+    syncApplySuccess: (p) => `Fertig: ${p.downloaded} Datei(en) hinzugefügt/aktualisiert, ${p.removed} Datei(en) entfernt.`,
+    syncApplyPartialFailIntro: 'Einige Dateien konnten nicht synchronisiert werden. Die erfolgreichen bleiben wirksam; die fehlgeschlagenen werden beim nächsten Update-Check erneut versucht:',
   },
   ru: {
     code: 'RU',
@@ -568,6 +636,23 @@ const WIKI_I18N = {
     updatedAt: (p) => `Обновлено ${p.date}`,
     unavailableNotice: (p) => `Для этой статьи пока нет перевода на ${p.langName}. Ниже показан оригинал на китайском.`,
     langNames: { zh: 'китайский', en: 'английский', ja: 'японский', de: 'немецкий', ru: 'русский' },
+    syncModalHead: 'Подтверждение обновления содержимого Wiki',
+    syncCancelBtn: 'Отмена',
+    syncApplyBtn: 'Подтвердить перезапись',
+    syncApplying: 'Перезапись…',
+    syncChecking: 'Подключение к удалённому репозиторию, проверка обновлений…',
+    syncErrNotConfigured: 'Удалённый репозиторий синхронизации ещё не настроен (wikiSync.owner/repo в config.json пусто). Обратитесь к администратору для настройки.',
+    syncErrPathEmpty: 'В указанном пути удалённого репозитория не найдено файлов. Проверьте адрес репозитория и настройки пути.',
+    syncErrTruncated: 'В удалённом репозитории слишком много файлов, список был обрезан, поэтому безопасное сравнение сейчас невозможно. Обратитесь к администратору.',
+    syncErrGeneric: (p) => `Не удалось проверить обновления: ${p.error || 'неизвестная ошибка'}`,
+    syncUpToDate: (p) => `Уже актуально (всего файлов: ${p.total}), обновлять нечего.`,
+    diffAdded: 'Новые файлы',
+    diffChanged: 'Изменённое содержимое',
+    diffRemoved: 'Удалено на удалённом сервере (после подтверждения будет удалено и локально)',
+    syncUpdateDetectedIntro: 'Обнаружено обновление на удалённом сервере. Это <b>прямая перезаписывающая зеркальная синхронизация</b>: после нажатия «Подтвердить перезапись» перечисленные ниже файлы будут напрямую перезаписаны последним содержимым с удалённого сервера (если вы вручную редактировали какую-либо из этих страниц, изменения будут перезаписаны и их нельзя будет восстановить).',
+    syncRequestFailed: (p) => `Ошибка запроса: ${p.msg}`,
+    syncApplySuccess: (p) => `Готово: добавлено/обновлено файлов — ${p.downloaded}, удалено — ${p.removed}.`,
+    syncApplyPartialFailIntro: 'Не удалось синхронизировать некоторые файлы. Успешно синхронизированные остаются в силе; неудачные будут повторены при следующей проверке обновлений:',
   },
 };
 
@@ -613,6 +698,9 @@ const WIKI_I18N = {
     document.getElementById('searchInput').placeholder = s.searchPlaceholder;
     document.getElementById('syncCheckBtn').textContent = s.syncBtn;
     document.getElementById('syncCheckBtn').title = s.syncBtnTitle;
+    document.getElementById('syncModalHead').textContent = s.syncModalHead;
+    document.getElementById('syncCancelBtn').textContent = s.syncCancelBtn;
+    document.getElementById('syncApplyBtn').textContent = s.syncApplyBtn;
     if (!currentCategory) {
       breadcrumbEl.textContent = s.breadcrumbHome;
     }
@@ -911,7 +999,7 @@ const WIKI_I18N = {
 
   function openSyncModal() {
     syncModal.classList.add('open');
-    syncModalBody.textContent = '正在联系远程仓库，检查是否有更新…';
+    syncModalBody.textContent = wt().syncChecking;
     syncApplyBtn.style.display = 'none';
   }
   function closeSyncModal() {
@@ -920,34 +1008,32 @@ const WIKI_I18N = {
 
   syncCheckBtn.addEventListener('click', async () => {
     openSyncModal();
+    const s = wt();
     try {
       const resp = await fetch('/api/wiki-sync/check', { method: 'POST' });
       const data = await resp.json();
       if (!data.ok) {
         const reasons = {
-          wiki_sync_not_configured: '还没有配置远程同步仓库（config.json 里的 wikiSync.owner/repo 为空），请先联系管理员配置。',
-          remote_wiki_path_empty_or_not_found: '远程仓库里指定路径下没有找到任何文件，请确认仓库地址和路径配置是否正确。',
-          remote_tree_truncated_too_large: '远程仓库文件太多导致列表被截断，本次无法安全比对，请联系管理员处理。'
+          wiki_sync_not_configured: s.syncErrNotConfigured,
+          remote_wiki_path_empty_or_not_found: s.syncErrPathEmpty,
+          remote_tree_truncated_too_large: s.syncErrTruncated
         };
-        syncModalBody.textContent = reasons[data.error] || `检查更新失败：${data.error || '未知错误'}`;
+        syncModalBody.textContent = reasons[data.error] || s.syncErrGeneric({ error: data.error });
         return;
       }
       if (!data.hasUpdate) {
-        syncModalBody.textContent = `当前已是最新（共 ${data.totalRemoteFiles} 个文件），没有需要更新的内容。`;
+        syncModalBody.textContent = s.syncUpToDate({ total: data.totalRemoteFiles });
         return;
       }
       const parts = [
-        renderDiffSection('新增文件', 'added', data.added),
-        renderDiffSection('内容变化', 'changed', data.changed),
-        renderDiffSection('远程已删除（确认后本地也会删除）', 'removed', data.removed)
+        renderDiffSection(s.diffAdded, 'added', data.added),
+        renderDiffSection(s.diffChanged, 'changed', data.changed),
+        renderDiffSection(s.diffRemoved, 'removed', data.removed)
       ].filter(Boolean).join('');
-      syncModalBody.innerHTML = `<div style="margin-bottom:12px;color:var(--text-muted);">
-        检测到远程有更新。这是<b>直接覆盖式镜像同步</b>：点"确认覆盖"后，下面列出的文件会
-        直接用远程最新内容覆盖本地（如果你自己手动改过其中某个页面，改动会被覆盖，无法保留）。
-      </div>${parts}`;
+      syncModalBody.innerHTML = `<div style="margin-bottom:12px;color:var(--text-muted);">${s.syncUpdateDetectedIntro}</div>${parts}`;
       syncApplyBtn.style.display = '';
     } catch (err) {
-      syncModalBody.textContent = `请求失败：${err.message}`;
+      syncModalBody.textContent = s.syncRequestFailed({ msg: err.message });
     }
   });
 
@@ -955,26 +1041,27 @@ const WIKI_I18N = {
   syncModal.addEventListener('click', (e) => { if (e.target === syncModal) closeSyncModal(); });
 
   syncApplyBtn.addEventListener('click', async () => {
+    const s = wt();
     syncApplyBtn.disabled = true;
-    syncApplyBtn.textContent = '覆盖中…';
+    syncApplyBtn.textContent = s.syncApplying;
     try {
       const resp = await fetch('/api/wiki-sync/apply', { method: 'POST' });
       const data = await resp.json();
       if (data.ok) {
-        syncModalBody.innerHTML = `<div style="color:var(--teal-soft);">已完成：新增/更新 ${data.downloadedCount} 个文件，删除 ${data.removedCount} 个文件。</div>`;
+        syncModalBody.innerHTML = `<div style="color:var(--teal-soft);">${s.syncApplySuccess({ downloaded: data.downloadedCount, removed: data.removedCount })}</div>`;
         syncApplyBtn.style.display = 'none';
         // 内容已经变化，重新加载分类树，避免用户还看着旧的导航结构
         init();
       } else {
         const failList = (data.failures || []).map((f) => `${escapeHtml(f.relPath)}：${escapeHtml(f.error)}`).join('<br>');
-        syncModalBody.innerHTML = `<div style="color:var(--rust-soft);">部分文件同步失败，已同步的部分仍然生效，失败的文件下次检查更新时会重试：<br>${failList}</div>`;
+        syncModalBody.innerHTML = `<div style="color:var(--rust-soft);">${s.syncApplyPartialFailIntro}<br>${failList}</div>`;
         syncApplyBtn.style.display = 'none';
       }
     } catch (err) {
-      syncModalBody.textContent = `请求失败：${err.message}`;
+      syncModalBody.textContent = s.syncRequestFailed({ msg: err.message });
     } finally {
       syncApplyBtn.disabled = false;
-      syncApplyBtn.textContent = '确认覆盖';
+      syncApplyBtn.textContent = s.syncApplyBtn;
     }
   });
 
