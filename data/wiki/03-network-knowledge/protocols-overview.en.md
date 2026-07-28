@@ -1,9 +1,9 @@
 ---
-title: "Common proxy protocols explained: vmess / vless / trojan / shadowsocks / hysteria2"
+title: "Common proxy protocols explained: vmess / vless / trojan / shadowsocks / hysteria2 / anytls"
 summary: What these terms actually mean and how they differ — after this page you should be able to follow the community's protocol discussions
 order: 0
-updated: 2026-07-22
-tags: [protocols, primer, vmess, vless, trojan, shadowsocks, hysteria2]
+updated: 2026-07-28
+tags: [protocols, primer, vmess, vless, trojan, shadowsocks, hysteria2, anytls]
 ---
 
 ## First, get one thing straight: a protocol is a "transport method," not "which provider"
@@ -14,7 +14,7 @@ it has nothing to do with which provider you use. The same provider often offers
 several different protocols at once, and the same is true if you self-host with
 NodeNanny.
 
-## Five common protocols, explained
+## Six common protocols, explained
 
 ### Shadowsocks (SS)
 The oldest and simplest of the bunch — essentially an encrypted SOCKS5 proxy.
@@ -28,7 +28,12 @@ The protocol native to the V2Ray project, using AEAD encryption (e.g. AES-128-GC
 with every packet carrying authentication info to guard against replay attacks.
 Compared to SS it adds a layer of identity verification and anti-analysis design, but
 because the handshake carries more information, its overhead is slightly higher than
-SS and VLESS.
+SS and VLESS. Worth noting: recent technical analysis suggests that deep-packet-
+inspection systems like the GFW have been steadily improving at recognizing VMess by
+analyzing packet timing and similar traffic patterns — there's no single authoritative
+detection-rate figure, and estimates vary a lot depending on the source, so don't put
+too much weight on any one number, but if you're in a network with strict censorship,
+this trend is worth factoring in.
 
 ### VLESS
 Think of it as a "lightweight VMess": it doesn't do additional encryption on its own
@@ -51,6 +56,17 @@ high-loss environments it often runs faster and more stably than traditional
 TCP-based protocols. The downside is that it runs over UDP, and some network
 environments restrict or block UDP traffic.
 
+### AnyTLS
+Designed by the sing-box team in 2024. The idea is to wrap arbitrary proxy traffic
+inside standard TLS, with configurable traffic padding to resist fingerprinting —
+similar in spirit to the VLESS+Reality "wrap it in TLS" approach. There's no
+standardized subscription-link format for it yet, though — configuration is mostly
+hand-written JSON, and client support is still concentrated in the sing-box ecosystem
+(with partial support in v2rayN and Shadowrocket). Its main advantage is that it's
+pure TCP: in networks that heavily restrict UDP (where QUIC-based protocols like
+Hysteria2 simply won't work), it's a usable fallback — the tradeoff is that throughput
+usually isn't as good as Hysteria2's.
+
 ## How to choose (general guidance, not tied to any specific provider)
 
 - **Just want stability and ease of use**: Shadowsocks / VMess are plenty, with the
@@ -60,6 +76,8 @@ environments restrict or block UDP traffic.
 - **Poor network environment (weak 4G, satellite, etc.)**: QUIC-based protocols like
   Hysteria2 tend to perform better, as long as your network doesn't heavily restrict
   UDP
+- **UDP is heavily restricted and Hysteria2 isn't an option**: AnyTLS is a pure-TCP
+  fallback, at the cost of usually lower throughput than Hysteria2
 
 ## How this relates to NodeNanny
 

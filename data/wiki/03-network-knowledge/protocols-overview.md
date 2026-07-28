@@ -1,9 +1,9 @@
 ---
-title: 常见代理协议科普：vmess / vless / trojan / shadowsocks / hysteria2
+title: 常见代理协议科普：vmess / vless / trojan / shadowsocks / hysteria2 / anytls
 summary: 这几个词到底是什么意思、有什么区别，看完这页大概就能听懂圈子里的讨论
 order: 0
-updated: 2026-07-22
-tags: [协议, 科普, vmess, vless, trojan, shadowsocks, hysteria2]
+updated: 2026-07-28
+tags: [协议, 科普, vmess, vless, trojan, shadowsocks, hysteria2, anytls]
 ---
 
 ## 先搞清楚一件事：协议是"传输方式"，不是"哪家机场"
@@ -12,7 +12,7 @@ tags: [协议, 科普, vmess, vless, trojan, shadowsocks, hysteria2]
 包装、加密、传过去"这套规则，跟你用哪家机场没关系——同一家机场往往可以同时提供
 好几种协议的节点，你自己搭的 NodeNanny 也是同样的道理。
 
-## 五个常见协议，各自是什么
+## 六个常见协议，各自是什么
 
 ### Shadowsocks（SS）
 最早、最简单的一种，本质是一个加了密的 SOCKS5 代理。优点是实现简单、各平台客户端
@@ -22,7 +22,10 @@ tags: [协议, 科普, vmess, vless, trojan, shadowsocks, hysteria2]
 ### VMess
 V2Ray 项目自带的协议，用 AEAD 加密（比如 AES-128-GCM），每个包都带认证信息，能
 防重放攻击。相比 SS 多了一层身份校验和抗分析设计，但因为握手信息里带的东西更多，
-开销比 SS 和 VLESS 稍大。
+开销比 SS 和 VLESS 稍大。需要说明的是，近年有技术分析指出，GFW这类深度包检测手段
+通过分析包时序等特征，对 VMess 的识别能力在持续提升——具体识别率没有统一权威数据，
+不同来源的说法差异很大，不建议只看某个单一数字，但如果你所在网络审查较严格，这个
+趋势值得纳入考虑。
 
 ### VLESS
 可以理解成"VMess 的轻量版"：本身不做额外加密（依赖外层 TLS 来提供加密），去掉了
@@ -39,12 +42,22 @@ V2Ray 项目自带的协议，用 AEAD 加密（比如 AES-128-GCM），每个�
 环境下往往比传统 TCP 类协议跑得更快更稳。缺点是走 UDP，部分网络环境会限制或屏蔽
 UDP 流量。
 
+### AnyTLS
+sing-box 团队在 2024 年设计的协议，思路是把任意代理流量包一层标准 TLS，并加了可
+配置的流量填充（padding）来对抗特征识别。类似 VLESS+Reality 的"套 TLS 壳"路线，
+但目前还没有统一的订阅链接格式，配置基本靠手动写 JSON，客户端支持也主要集中在
+sing-box 生态（部分支持 v2rayN、Shadowrocket）。优点是纯 TCP：在 UDP 被严格限制、
+Hysteria2 这类基于 QUIC 的协议用不了的网络环境里，是一个可用的备选方向，代价是
+吞吐量通常不如 Hysteria2。
+
 ## 怎么选（一般性原则，不针对具体商家）
 
 - **只看稳定性和易用性**：Shadowsocks / VMess 足够，客户端支持最成熟
 - **更看重抗封锁/隐蔽性**：VLESS + Reality 或 Trojan 是目前普遍认可效果较好的方向
 - **网络环境差（弱4G、卫星网络等）**：Hysteria2 这类基于 QUIC 的协议往往体验更好，
   前提是你的网络没有严格限制 UDP
+- **UDP 被严格限制、Hysteria2 用不了**：AnyTLS 是一个纯 TCP 的备选方向，代价是
+  吞吐量通常比 Hysteria2 低
 
 ## 跟 NodeNanny 的关系
 
