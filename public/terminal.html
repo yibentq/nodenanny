@@ -33,6 +33,10 @@
     --rust-soft: #dd8468;
     --relic-glow: rgba(200, 150, 62, 0.18);
   }
+  .xterm-viewport::-webkit-scrollbar { width: 8px; }
+  .xterm-viewport::-webkit-scrollbar-track { background: var(--bg-b); }
+  .xterm-viewport::-webkit-scrollbar-thumb { background: var(--brass-dim); border-radius: 4px; }
+  .xterm-viewport::-webkit-scrollbar-thumb:hover { background: var(--brass); }
   * { box-sizing: border-box; }
   body {
     margin: 0;
