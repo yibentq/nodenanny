@@ -30,6 +30,9 @@ server {
 
     location / {
         proxy_pass http://127.0.0.1:8787;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";        # 上面这三行是终端功能(WebSocket)必需的，没有会导致终端连接反复断开
         proxy_set_header Host $http_host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -44,6 +47,9 @@ server {
 #
 #     location / {
 #         proxy_pass http://127.0.0.1:8787;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
 #         proxy_set_header Host $http_host;
 #         proxy_set_header X-Real-IP $remote_addr;
 #         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
