@@ -945,10 +945,19 @@
       0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
   }
 
+  /* 内容同步/故障报告模块——founder反馈这两张卡片之前只有素色2px边框，跟
+     紧邻的守望记录(.log)/AI诊断(.ai-card)站在一起显得"扁"、不契合。改成
+     跟守望记录同一套"账本"边框(3px+顶部古铜色线)，视觉重量对齐。 */
+  .sync-card {
+    border: 3px solid var(--hairline);
+    border-top: 3px solid var(--brass);
+    box-shadow: 0 1px 0 rgba(0,0,0,0.35), inset 0 0 0 1px rgba(232,196,119,0.08);
+  }
+
 
   /* ---------- 模块标题：希腊回纹（meander）细线替代普通下划线 ----------
      体现"亚历山大灯塔"所在的古代地中海建筑语汇，线条极细，只作点缀。 */
-  .log h2, .ai-card h2, .sub-card h2, .starmap-head h2 {
+  .log h2, .ai-card h2, .sub-card h2, .sync-card h2, .starmap-head h2 {
     display: inline-block;
     padding-bottom: 8px;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 6'%3E%3Cpath d='M0 5 H4 V1 H8 V5 H12 V1 H16' fill='none' stroke='%237d6534' stroke-width='1'/%3E%3C/svg%3E");

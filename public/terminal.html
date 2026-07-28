@@ -289,6 +289,26 @@
   .memo-section-label:first-child { margin-top: 0; padding-top: 0; border-top: none; }
   .memo-entry.memo-auto-matched { background: rgba(200,150,62,0.06); border-radius: 4px; padding: 12px 10px; margin: 0 -10px 6px; border-bottom: none; }
 
+  /* 语言切换器：跟主面板(index.html)/wiki页(wiki.html)的.lang-switch保持同一套视觉语言 */
+  .lang-switch { display: flex; align-items: center; flex-shrink: 0; }
+  .lang-switch button {
+    background: none;
+    border: none;
+    border-right: 1px solid var(--hairline);
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    padding: 4px 9px;
+    cursor: pointer;
+  }
+  .lang-switch button:last-child { border-right: none; }
+  .lang-switch button:hover { color: var(--text); }
+  .lang-switch button.active { color: var(--brass-soft); border-bottom: 1px solid var(--brass); }
+  .lang-switch button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
+  /* 嵌入到主面板悬浮层里时，外层index.html自己就有一份语言切换器，
+     终端内部再放一份是重复的，跟隐藏面包屑同一个道理 */
+  body.embedded .lang-switch { display: none; }
+
   @media (max-width: 640px) {
     .term-page { padding: 10px; }
     .term-header { flex-direction: column; align-items: flex-start; }
@@ -298,7 +318,7 @@
 </head>
 <body>
   <div class="term-page">
-    <div class="term-breadcrumb"><a href="/" id="term-back-link">← 返回主面板</a></div>
+    <div class="term-breadcrumb"><a href="/" id="term-back-link"><span id="term-back-text">← 返回主面板</span></a></div>
 
     <div class="term-card">
       <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
@@ -312,27 +332,28 @@
             <line x1="11.8" y1="19.5" x2="20.2" y2="19.5" stroke="#8a8f8a" stroke-width="1"/>
             <line x1="6" y1="24" x2="26" y2="24" stroke="#8a8f8a" stroke-width="1.2"/>
           </svg>
-          <span class="term-title">远程 Shell</span>
+          <span class="term-title" id="term-title">远程 Shell</span>
           <span class="term-status-badge state-idle" id="status-badge">
             <span class="term-status-dot"></span>
             <span id="status-msg">未解锁</span>
           </span>
         </div>
         <div class="term-header-right">
+          <div class="lang-switch" id="lang-switch" role="group" aria-label="Language"></div>
           <button id="memo-btn" class="term-btn kb" disabled title="连接终端后可用：查看知识库修复命令速查表">
             <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <path d="M3 4c2-1 5-1 7 0v12c-2-1-5-1-7 0V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
               <path d="M17 4c-2-1-5-1-7 0v12c2-1 5-1 7 0V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
             </svg>
-            速查表
+            <span id="memo-btn-text">速查表</span>
           </button>
         </div>
       </div>
 
       <div class="term-unlock-row" id="unlock-row">
-        <label for="terminal-password">终端密码</label>
+        <label for="terminal-password" id="unlock-label">终端密码</label>
         <input id="terminal-password" type="password" autocomplete="off" />
-        <button id="unlock-btn" class="term-btn primary">解锁并连接</button>
+        <button id="unlock-btn" class="term-btn primary"><span id="unlock-btn-text">解锁并连接</span></button>
       </div>
 
       <div class="term-body">
@@ -343,12 +364,12 @@
             <path d="M8 13l4 3-4 3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
             <line x1="15" y1="19" x2="21" y2="19" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
           </svg>
-          <div class="term-placeholder-title">终端尚未连接</div>
-          <div class="term-placeholder-sub">在上方输入终端密码并点击"解锁并连接"，即可在这里打开一个远程shell会话。</div>
+          <div class="term-placeholder-title" id="term-placeholder-title">终端尚未连接</div>
+          <div class="term-placeholder-sub" id="term-placeholder-sub">在上方输入终端密码并点击"解锁并连接"，即可在这里打开一个远程shell会话。</div>
         </div>
       </div>
 
-      <div class="term-footer">
+      <div class="term-footer" id="term-footer">
         这是一台正在被 NodeNanny 看护的服务器的远程shell，操作等同于直接登录服务器终端，请谨慎执行命令。
         遇到问题时，优先点击右上角"速查表"查看知识库里已核对过的修复命令，而不是凭记忆直接敲；标记为
         "未经人工确认"的命令仅支持复制、需要你手动粘贴执行后再确认。会话空闲一段时间后会自动断开，重新
@@ -391,6 +412,308 @@
       // 非嵌入模式：不preventDefault，走href="/"的原生跳转
     });
 
+    // ---------- 界面文案五语言字典 ----------
+    // 跟主面板(index.html)/wiki页(wiki.html)复用同一套 localStorage 键(nodenanny-lang)
+    // 和语言代码(zh/en/ja/de/ru)，切主面板语言后打开终端会自动跟随。
+    // 只覆盖"界面壳"文案（标题、按钮、状态提示、页脚说明这些）。知识库条目本身的
+    // title字段目前知识库数据结构里只存了一份中文（不像explanation按语言分好几份），
+    // 这是数据结构的限制，不是这份字典能解决的——条目标题会一直显示中文，这是已知的、
+    // 记录在案的限制，不是遗漏。
+    const TERM_I18N = {
+      zh: {
+        code: '中',
+        pageTitle: 'NodeNanny · 在线终端',
+        backLink: '← 返回主面板',
+        title: '远程 Shell',
+        statusIdle: '未解锁',
+        statusVerifying: '验证中…',
+        statusUnlockedConnecting: (p) => `已解锁（${p.minutes}分钟内有效），正在连接…`,
+        statusConnectingReady: '已连接，等待会话就绪…',
+        statusConnected: '已连接',
+        statusClosed: '连接已关闭',
+        statusError: '连接出错',
+        statusPasswordError: (p) => `密码错误或终端未启用：${p.detail}`,
+        statusRequestFailed: (p) => `请求失败：${p.detail}`,
+        idleTimeoutMsg: '\r\n[会话因空闲超时已关闭，请重新解锁]\r\n',
+        memoBtn: '速查表',
+        memoBtnTitle: '连接终端后可用：查看知识库修复命令速查表',
+        unlockLabel: '终端密码',
+        unlockBtn: '解锁并连接',
+        placeholderTitle: '终端尚未连接',
+        placeholderSub: '在上方输入终端密码并点击"解锁并连接"，即可在这里打开一个远程shell会话。',
+        footer: '这是一台正在被 NodeNanny 看护的服务器的远程shell，操作等同于直接登录服务器终端，请谨慎执行命令。遇到问题时，优先点击右上角"速查表"查看知识库里已核对过的修复命令，而不是凭记忆直接敲；标记为"未经人工确认"的命令仅支持复制、需要你手动粘贴执行后再确认。会话空闲一段时间后会自动断开，重新解锁即可继续。',
+        memoSearchPlaceholder: '搜索知识库条目（标题/关键词）...',
+        memoLoading: '加载中…',
+        memoLoadFailed: (p) => `加载知识库失败：${p.msg}`,
+        memoNoMatch: '没有匹配的知识库条目',
+        memoAutoMatchLabel: '根据最近故障自动匹配',
+        memoAllEntriesLabel: '全部知识库条目',
+        riskLabels: { low: '低', medium: '中', high: '高', 'copy-only': '仅复制' },
+        runBtn: '填入终端',
+        copyBtn: '复制（未经人工确认，不能一键执行）',
+        copiedMsg: '已复制，请手动粘贴到终端确认后执行',
+        copyFailedMsg: '复制失败，请手动选中命令文本',
+        needConnectMsg: '请先解锁并连接终端',
+        writingMsg: '写入中…',
+        busyTypingMsg: '终端正忙（你正在手动输入），请手动粘贴命令',
+        sessionExpiredMsg: '终端会话已失效，请重新连接',
+        genericFailMsg: (p) => `失败：${p.err}`,
+        autoExecutedMsg: '已自动执行（低风险命令）',
+        filledWaitEnterMsg: '已填入终端输入框，请手动按回车确认',
+        highRiskConfirmMsg: '高危命令，需二次确认（60秒内有效） ',
+        confirmBtnText: '确认执行',
+        unverifiedCopyOnlyMsg: '该条目未经人工确认，仅支持复制手动执行',
+        requestFailedMsg: (p) => `请求失败：${p.err}`,
+        confirmingMsg: '确认中…',
+        filledConfirmedMsg: '已填入终端，请手动按回车确认（高危命令始终需要人工按下Enter）',
+        confirmFailedMsg: (p) => `确认失败：${p.err}`
+      },
+      en: {
+        code: 'EN',
+        pageTitle: 'NodeNanny · Terminal',
+        backLink: '← Back to Dashboard',
+        title: 'Remote Shell',
+        statusIdle: 'Locked',
+        statusVerifying: 'Verifying…',
+        statusUnlockedConnecting: (p) => `Unlocked (valid for ${p.minutes} min), connecting…`,
+        statusConnectingReady: 'Connected, waiting for session…',
+        statusConnected: 'Connected',
+        statusClosed: 'Connection closed',
+        statusError: 'Connection error',
+        statusPasswordError: (p) => `Wrong password or terminal disabled: ${p.detail}`,
+        statusRequestFailed: (p) => `Request failed: ${p.detail}`,
+        idleTimeoutMsg: '\r\n[Session closed due to inactivity — please unlock again]\r\n',
+        memoBtn: 'Cheat Sheet',
+        memoBtnTitle: 'Available once connected: view knowledge-base fix commands',
+        unlockLabel: 'Terminal password',
+        unlockBtn: 'Unlock & Connect',
+        placeholderTitle: 'Terminal not connected',
+        placeholderSub: 'Enter the terminal password above and click "Unlock & Connect" to open a remote shell session here.',
+        footer: 'This is a remote shell on a server being watched by NodeNanny — commands here run exactly as if you were logged into the server directly, so please be careful. When something looks wrong, check the "Cheat Sheet" in the top-right first for vetted fix commands rather than typing from memory; entries marked "not human-verified" can only be copied and must be pasted and confirmed manually. The session disconnects automatically after being idle for a while — just unlock again to continue.',
+        memoSearchPlaceholder: 'Search knowledge base (title/keyword)...',
+        memoLoading: 'Loading…',
+        memoLoadFailed: (p) => `Failed to load knowledge base: ${p.msg}`,
+        memoNoMatch: 'No matching knowledge-base entries',
+        memoAutoMatchLabel: 'Auto-matched from recent failure',
+        memoAllEntriesLabel: 'All knowledge-base entries',
+        riskLabels: { low: 'low', medium: 'medium', high: 'high', 'copy-only': 'copy-only' },
+        runBtn: 'Fill into terminal',
+        copyBtn: 'Copy (not human-verified, cannot run with one click)',
+        copiedMsg: 'Copied — please paste into the terminal and confirm manually',
+        copyFailedMsg: 'Copy failed — please select the command text manually',
+        needConnectMsg: 'Please unlock and connect the terminal first',
+        writingMsg: 'Writing…',
+        busyTypingMsg: 'Terminal is busy (you are typing) — please paste the command manually',
+        sessionExpiredMsg: 'Terminal session has expired, please reconnect',
+        genericFailMsg: (p) => `Failed: ${p.err}`,
+        autoExecutedMsg: 'Executed automatically (low-risk command)',
+        filledWaitEnterMsg: 'Filled into the terminal input — please press Enter manually to confirm',
+        highRiskConfirmMsg: 'High-risk command, needs confirmation (valid for 60s) ',
+        confirmBtnText: 'Confirm & run',
+        unverifiedCopyOnlyMsg: 'This entry is not human-verified — copy only, run it manually',
+        requestFailedMsg: (p) => `Request failed: ${p.err}`,
+        confirmingMsg: 'Confirming…',
+        filledConfirmedMsg: 'Filled into the terminal — please press Enter manually to confirm (high-risk commands always need a manual Enter)',
+        confirmFailedMsg: (p) => `Confirmation failed: ${p.err}`
+      },
+      ja: {
+        code: 'JA',
+        pageTitle: 'NodeNanny · ターミナル',
+        backLink: '← メイン画面に戻る',
+        title: 'リモートShell',
+        statusIdle: '未解錠',
+        statusVerifying: '検証中…',
+        statusUnlockedConnecting: (p) => `解錠しました（${p.minutes}分間有効）、接続中…`,
+        statusConnectingReady: '接続済み、セッション準備待ち…',
+        statusConnected: '接続済み',
+        statusClosed: '接続が閉じられました',
+        statusError: '接続エラー',
+        statusPasswordError: (p) => `パスワードが違うか、ターミナルが無効です：${p.detail}`,
+        statusRequestFailed: (p) => `リクエスト失敗：${p.detail}`,
+        idleTimeoutMsg: '\r\n[アイドル状態のためセッションが閉じられました。再度解錠してください]\r\n',
+        memoBtn: 'チートシート',
+        memoBtnTitle: '接続後に利用可能：ナレッジベースの修復コマンドを確認',
+        unlockLabel: 'ターミナルパスワード',
+        unlockBtn: '解錠して接続',
+        placeholderTitle: 'ターミナル未接続',
+        placeholderSub: '上のパスワードを入力し「解錠して接続」を押すと、ここにリモートshellセッションが開きます。',
+        footer: 'これはNodeNannyが監視しているサーバーのリモートshellです。ここでの操作はサーバーに直接ログインするのと同じなので、慎重に実行してください。問題があれば、記憶に頼って直接入力する前に右上の「チートシート」で確認済みの修復コマンドを確認してください。「未検証」と表示されたコマンドはコピーのみ可能で、手動で貼り付けて確認してから実行する必要があります。セッションはしばらく操作がないと自動的に切断されますが、再度解錠すれば続行できます。',
+        memoSearchPlaceholder: 'ナレッジベースを検索（タイトル/キーワード）...',
+        memoLoading: '読み込み中…',
+        memoLoadFailed: (p) => `ナレッジベースの読み込みに失敗：${p.msg}`,
+        memoNoMatch: '該当するナレッジベース項目がありません',
+        memoAutoMatchLabel: '最近の障害から自動マッチ',
+        memoAllEntriesLabel: 'すべてのナレッジベース項目',
+        riskLabels: { low: '低', medium: '中', high: '高', 'copy-only': 'コピーのみ' },
+        runBtn: 'ターミナルに入力',
+        copyBtn: 'コピー（未検証のためワンクリック実行不可）',
+        copiedMsg: 'コピーしました。ターミナルに貼り付けて手動で確認してください',
+        copyFailedMsg: 'コピーに失敗しました。コマンドのテキストを手動で選択してください',
+        needConnectMsg: '先にターミナルを解錠して接続してください',
+        writingMsg: '入力中…',
+        busyTypingMsg: 'ターミナルが使用中です（手動入力中）。手動で貼り付けてください',
+        sessionExpiredMsg: 'ターミナルセッションが失効しました。再接続してください',
+        genericFailMsg: (p) => `失敗：${p.err}`,
+        autoExecutedMsg: '自動実行しました（低リスクコマンド）',
+        filledWaitEnterMsg: 'ターミナル入力欄に入力しました。手動でEnterを押して確認してください',
+        highRiskConfirmMsg: '高リスクコマンドのため再確認が必要です（60秒間有効） ',
+        confirmBtnText: '確認して実行',
+        unverifiedCopyOnlyMsg: 'この項目は未検証のため、コピーして手動実行のみ可能です',
+        requestFailedMsg: (p) => `リクエスト失敗：${p.err}`,
+        confirmingMsg: '確認中…',
+        filledConfirmedMsg: 'ターミナルに入力しました。手動でEnterを押して確認してください（高リスクコマンドは常に手動確認が必要です）',
+        confirmFailedMsg: (p) => `確認に失敗：${p.err}`
+      },
+      de: {
+        code: 'DE',
+        pageTitle: 'NodeNanny · Terminal',
+        backLink: '← Zurück zum Dashboard',
+        title: 'Remote-Shell',
+        statusIdle: 'Gesperrt',
+        statusVerifying: 'Wird geprüft…',
+        statusUnlockedConnecting: (p) => `Entsperrt (gültig für ${p.minutes} Min.), verbinde…`,
+        statusConnectingReady: 'Verbunden, warte auf Sitzung…',
+        statusConnected: 'Verbunden',
+        statusClosed: 'Verbindung geschlossen',
+        statusError: 'Verbindungsfehler',
+        statusPasswordError: (p) => `Falsches Passwort oder Terminal deaktiviert: ${p.detail}`,
+        statusRequestFailed: (p) => `Anfrage fehlgeschlagen: ${p.detail}`,
+        idleTimeoutMsg: '\r\n[Sitzung wegen Inaktivität geschlossen — bitte erneut entsperren]\r\n',
+        memoBtn: 'Spickzettel',
+        memoBtnTitle: 'Verfügbar nach Verbindung: Fix-Befehle aus der Wissensdatenbank ansehen',
+        unlockLabel: 'Terminal-Passwort',
+        unlockBtn: 'Entsperren & Verbinden',
+        placeholderTitle: 'Terminal nicht verbunden',
+        placeholderSub: 'Gib oben das Terminal-Passwort ein und klicke auf „Entsperren & Verbinden“, um hier eine Remote-Shell-Sitzung zu öffnen.',
+        footer: 'Dies ist eine Remote-Shell auf einem von NodeNanny überwachten Server — Befehle hier wirken genauso, als wärst du direkt am Server angemeldet, bitte vorsichtig ausführen. Prüfe bei Problemen zuerst oben rechts den „Spickzettel“ für geprüfte Fix-Befehle, statt aus dem Gedächtnis zu tippen; als „nicht manuell verifiziert“ markierte Befehle können nur kopiert werden und müssen manuell eingefügt und bestätigt werden. Die Sitzung trennt sich nach einer Weile Inaktivität automatisch — einfach erneut entsperren, um fortzufahren.',
+        memoSearchPlaceholder: 'Wissensdatenbank durchsuchen (Titel/Stichwort)...',
+        memoLoading: 'Wird geladen…',
+        memoLoadFailed: (p) => `Wissensdatenbank konnte nicht geladen werden: ${p.msg}`,
+        memoNoMatch: 'Keine passenden Einträge in der Wissensdatenbank',
+        memoAutoMatchLabel: 'Automatisch anhand des letzten Fehlers zugeordnet',
+        memoAllEntriesLabel: 'Alle Einträge der Wissensdatenbank',
+        riskLabels: { low: 'niedrig', medium: 'mittel', high: 'hoch', 'copy-only': 'nur kopieren' },
+        runBtn: 'In Terminal einfügen',
+        copyBtn: 'Kopieren (nicht verifiziert, kein Ein-Klick-Ausführen)',
+        copiedMsg: 'Kopiert — bitte manuell ins Terminal einfügen und bestätigen',
+        copyFailedMsg: 'Kopieren fehlgeschlagen — bitte Befehlstext manuell auswählen',
+        needConnectMsg: 'Bitte zuerst das Terminal entsperren und verbinden',
+        writingMsg: 'Wird geschrieben…',
+        busyTypingMsg: 'Terminal ist beschäftigt (du tippst gerade) — bitte manuell einfügen',
+        sessionExpiredMsg: 'Terminal-Sitzung ist abgelaufen, bitte erneut verbinden',
+        genericFailMsg: (p) => `Fehlgeschlagen: ${p.err}`,
+        autoExecutedMsg: 'Automatisch ausgeführt (risikoarmer Befehl)',
+        filledWaitEnterMsg: 'In das Terminal-Eingabefeld eingefügt — bitte manuell Enter drücken, um zu bestätigen',
+        highRiskConfirmMsg: 'Risikoreicher Befehl, erfordert Bestätigung (60 Sekunden gültig) ',
+        confirmBtnText: 'Bestätigen & ausführen',
+        unverifiedCopyOnlyMsg: 'Dieser Eintrag ist nicht verifiziert — nur Kopieren und manuelles Ausführen möglich',
+        requestFailedMsg: (p) => `Anfrage fehlgeschlagen: ${p.err}`,
+        confirmingMsg: 'Wird bestätigt…',
+        filledConfirmedMsg: 'In das Terminal eingefügt — bitte manuell Enter drücken, um zu bestätigen (risikoreiche Befehle erfordern immer eine manuelle Bestätigung)',
+        confirmFailedMsg: (p) => `Bestätigung fehlgeschlagen: ${p.err}`
+      },
+      ru: {
+        code: 'RU',
+        pageTitle: 'NodeNanny · Терминал',
+        backLink: '← Назад на главную',
+        title: 'Удалённая оболочка',
+        statusIdle: 'Заблокировано',
+        statusVerifying: 'Проверка…',
+        statusUnlockedConnecting: (p) => `Разблокировано (действует ${p.minutes} мин.), подключение…`,
+        statusConnectingReady: 'Подключено, ожидание сессии…',
+        statusConnected: 'Подключено',
+        statusClosed: 'Соединение закрыто',
+        statusError: 'Ошибка соединения',
+        statusPasswordError: (p) => `Неверный пароль или терминал отключён: ${p.detail}`,
+        statusRequestFailed: (p) => `Ошибка запроса: ${p.detail}`,
+        idleTimeoutMsg: '\r\n[Сессия закрыта из-за бездействия — разблокируйте снова]\r\n',
+        memoBtn: 'Шпаргалка',
+        memoBtnTitle: 'Доступно после подключения: команды исправления из базы знаний',
+        unlockLabel: 'Пароль терминала',
+        unlockBtn: 'Разблокировать и подключиться',
+        placeholderTitle: 'Терминал не подключён',
+        placeholderSub: 'Введите пароль терминала выше и нажмите «Разблокировать и подключиться», чтобы открыть сессию удалённой оболочки здесь.',
+        footer: 'Это удалённая оболочка сервера, за которым следит NodeNanny — команды здесь выполняются так же, как при прямом входе на сервер, будьте осторожны. При проблемах сначала проверьте «Шпаргалку» в правом верхнем углу с проверенными командами исправления, а не набирайте по памяти; команды с пометкой «не проверено вручную» можно только скопировать и вставить/подтвердить вручную. Сессия автоматически отключается после периода бездействия — просто разблокируйте снова, чтобы продолжить.',
+        memoSearchPlaceholder: 'Поиск по базе знаний (заголовок/ключевое слово)...',
+        memoLoading: 'Загрузка…',
+        memoLoadFailed: (p) => `Не удалось загрузить базу знаний: ${p.msg}`,
+        memoNoMatch: 'Нет подходящих записей в базе знаний',
+        memoAutoMatchLabel: 'Автоматически найдено по недавнему сбою',
+        memoAllEntriesLabel: 'Все записи базы знаний',
+        riskLabels: { low: 'низкий', medium: 'средний', high: 'высокий', 'copy-only': 'только копирование' },
+        runBtn: 'Вставить в терминал',
+        copyBtn: 'Копировать (не проверено вручную, нельзя выполнить в один клик)',
+        copiedMsg: 'Скопировано — вставьте в терминал и подтвердите вручную',
+        copyFailedMsg: 'Не удалось скопировать — выделите текст команды вручную',
+        needConnectMsg: 'Сначала разблокируйте и подключите терминал',
+        writingMsg: 'Запись…',
+        busyTypingMsg: 'Терминал занят (вы печатаете вручную) — вставьте команду вручную',
+        sessionExpiredMsg: 'Сессия терминала истекла, переподключитесь',
+        genericFailMsg: (p) => `Ошибка: ${p.err}`,
+        autoExecutedMsg: 'Выполнено автоматически (низкий риск)',
+        filledWaitEnterMsg: 'Вставлено в поле ввода терминала — нажмите Enter вручную для подтверждения',
+        highRiskConfirmMsg: 'Команда высокого риска, требуется подтверждение (действительно 60 секунд) ',
+        confirmBtnText: 'Подтвердить и выполнить',
+        unverifiedCopyOnlyMsg: 'Эта запись не проверена вручную — только копирование и ручное выполнение',
+        requestFailedMsg: (p) => `Ошибка запроса: ${p.err}`,
+        confirmingMsg: 'Подтверждение…',
+        filledConfirmedMsg: 'Вставлено в терминал — нажмите Enter вручную для подтверждения (команды высокого риска всегда требуют ручного подтверждения)',
+        confirmFailedMsg: (p) => `Ошибка подтверждения: ${p.err}`
+      }
+    };
+    const SUPPORTED_LANGS = ['zh', 'en', 'ja', 'de', 'ru'];
+    let LANG = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0, 2);
+    if (!SUPPORTED_LANGS.includes(LANG)) LANG = 'zh';
+    function tt() { return TERM_I18N[LANG]; }
+
+    // 把静态外壳文案(标题/按钮/占位提示/页脚等)按当前LANG重新渲染一遍。
+    // 打开页面时调用一次；切换语言时也要重新调用，否则按钮上的字不会跟着变。
+    function applyStaticText() {
+      const d = tt();
+      document.title = d.pageTitle;
+      document.documentElement.lang = LANG;
+      document.getElementById('term-back-text').textContent = d.backLink;
+      document.getElementById('term-title').textContent = d.title;
+      document.getElementById('memo-btn-text').textContent = d.memoBtn;
+      document.getElementById('memo-btn').title = d.memoBtnTitle;
+      document.getElementById('unlock-label').textContent = d.unlockLabel;
+      document.getElementById('unlock-btn-text').textContent = d.unlockBtn;
+      document.getElementById('term-placeholder-title').textContent = d.placeholderTitle;
+      document.getElementById('term-placeholder-sub').textContent = d.placeholderSub;
+      document.getElementById('term-footer').textContent = d.footer;
+      document.getElementById('memoSearch').placeholder = d.memoSearchPlaceholder;
+      // 状态徽章文字：只在还没连接过(idle)时才跟着切语言重置，避免语言切换
+      // 打断一次正在进行/已完成的连接（比如已经"已连接"了，不该被切语言打回"未解锁"）。
+      const badge = document.getElementById('status-badge');
+      if (badge.className.includes('state-idle')) {
+        document.getElementById('status-msg').textContent = d.statusIdle;
+      }
+    }
+
+    function buildLangSwitch() {
+      const el = document.getElementById('lang-switch');
+      el.innerHTML = Object.keys(TERM_I18N).map((code) =>
+        `<button data-lang="${code}" class="${code === LANG ? 'active' : ''}">${TERM_I18N[code].code}</button>`
+      ).join('');
+      el.querySelectorAll('button').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (btn.dataset.lang === LANG) return;
+          LANG = btn.dataset.lang;
+          localStorage.setItem('nodenanny-lang', LANG);
+          buildLangSwitch();
+          applyStaticText();
+          // 知识库速查表如果已经加载过条目，也要跟着重新渲染一遍
+          // (title字段本身不分语言，但explanation/分组标签/风险标签都要跟着变)。
+          if (typeof kbEntries !== 'undefined' && kbEntries.length > 0) {
+            renderMemoList(document.getElementById('memoSearch').value);
+          }
+        });
+      });
+    }
+
+    buildLangSwitch();
+    applyStaticText();
+
     const term = new Terminal({
       convertEol: true,
       fontFamily: "'IBM Plex Mono', monospace",
@@ -426,7 +749,7 @@
       const password = document.getElementById('terminal-password').value;
       const btn = document.getElementById('unlock-btn');
       btn.disabled = true;
-      setStatusBadge('connecting', '验证中…');
+      setStatusBadge('connecting', tt().statusVerifying);
       try {
         const resp = await fetch('/api/terminal/unlock', {
           method: 'POST',
@@ -435,14 +758,14 @@
         });
         const data = await resp.json();
         if (!data.ok) {
-          setStatusBadge('error', '密码错误或终端未启用：' + (data.error || ''));
+          setStatusBadge('error', tt().statusPasswordError({ detail: data.error || '' }));
           btn.disabled = false;
           return;
         }
-        setStatusBadge('connecting', `已解锁（${data.expiresInMinutes}分钟内有效），正在连接…`);
+        setStatusBadge('connecting', tt().statusUnlockedConnecting({ minutes: data.expiresInMinutes }));
         connectWebSocket();
       } catch (err) {
-        setStatusBadge('error', '请求失败：' + err.message);
+        setStatusBadge('error', tt().statusRequestFailed({ detail: err.message }));
         btn.disabled = false;
       }
     }
@@ -452,7 +775,7 @@
       ws = new WebSocket(`${protocol}//${location.host}/ws/terminal`);
 
       ws.onopen = () => {
-        setStatusBadge('connecting', '已连接，等待会话就绪…');
+        setStatusBadge('connecting', tt().statusConnectingReady);
         // 首次连接后立刻同步一次终端尺寸
         sendResize();
       };
@@ -463,16 +786,16 @@
           document.getElementById('memo-btn').disabled = false;
           document.getElementById('unlock-row').classList.add('hidden');
           document.getElementById('term-placeholder').classList.add('hidden');
-          setStatusBadge('connected', '已连接');
+          setStatusBadge('connected', tt().statusConnected);
           console.log('终端会话ID（知识库写入命令时需要用到）：', currentSessionId);
         } else if (msg.type === 'output') {
           term.write(msg.data);
         } else if (msg.type === 'idle_timeout') {
-          term.write('\r\n[会话因空闲超时已关闭，请重新解锁]\r\n');
+          term.write(tt().idleTimeoutMsg);
         }
       };
       ws.onclose = () => {
-        setStatusBadge('error', '连接已关闭');
+        setStatusBadge('error', tt().statusClosed);
         document.getElementById('unlock-btn').disabled = false;
         document.getElementById('unlock-row').classList.remove('hidden');
         document.getElementById('term-placeholder').classList.remove('hidden');
@@ -480,7 +803,7 @@
         currentSessionId = null;
       };
       ws.onerror = () => {
-        setStatusBadge('error', '连接出错');
+        setStatusBadge('error', tt().statusError);
       };
 
       term.onData((data) => {
@@ -541,18 +864,14 @@
         autoMatchedEntries = [];
       }
     }
-    // 跟主面板(index.html)/wiki页(wiki.html)复用同一套 localStorage 键(nodenanny-lang)，不支持的语言回退到zh
-    const SUPPORTED_LANGS = ['zh', 'en', 'ja', 'de', 'ru'];
-    let LANG = localStorage.getItem('nodenanny-lang') || (navigator.language || 'zh').slice(0, 2);
-    if (!SUPPORTED_LANGS.includes(LANG)) LANG = 'zh';
-
     function escapeHtml(s) {
       return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
     function riskBadge(risk) {
-      const map = { low: ['risk-low', 'low'], medium: ['risk-medium', 'medium'], high: ['risk-high', 'high'] };
-      const [cls, label] = map[risk] || ['risk-copy', risk];
+      const map = { low: 'risk-low', medium: 'risk-medium', high: 'risk-high' };
+      const cls = map[risk] || 'risk-copy';
+      const label = (tt().riskLabels && tt().riskLabels[risk]) || risk;
       return `<span class="risk-badge ${cls}">${label}</span>`;
     }
 
@@ -564,8 +883,8 @@
       const cmdRows = (entry.fixCommands || []).map((cmd, idx) => {
         const cmdId = `${entry.id}__${idx}`;
         const actionBtn = verified
-          ? `<button data-cmd-id="${cmdId}" class="memo-run-btn">填入终端</button>`
-          : `<button data-cmd-id="${cmdId}" class="memo-copy-btn secondary">复制（未经人工确认，不能一键执行）</button>`;
+          ? `<button data-cmd-id="${cmdId}" class="memo-run-btn">${escapeHtml(tt().runBtn)}</button>`
+          : `<button data-cmd-id="${cmdId}" class="memo-copy-btn secondary">${escapeHtml(tt().copyBtn)}</button>`;
         return `<div class="memo-cmd-row">
           <code id="code-${cmdId}">${escapeHtml(cmd)}</code>
           ${actionBtn}
@@ -591,9 +910,9 @@
         const pinnedIds = new Set(autoMatchedEntries.map((e) => e.id));
         const rest = kbEntries.filter((e) => !pinnedIds.has(e.id));
         memoList.innerHTML =
-          `<div class="memo-section-label">根据最近故障自动匹配</div>` +
+          `<div class="memo-section-label">${escapeHtml(tt().memoAutoMatchLabel)}</div>` +
           autoMatchedEntries.map((e) => renderEntry(e, { autoMatched: true })).join('') +
-          (rest.length ? `<div class="memo-section-label">全部知识库条目</div>` + rest.map((e) => renderEntry(e)).join('') : '');
+          (rest.length ? `<div class="memo-section-label">${escapeHtml(tt().memoAllEntriesLabel)}</div>` + rest.map((e) => renderEntry(e)).join('') : '');
         return;
       }
 
@@ -602,7 +921,7 @@
         return hay.includes(q);
       });
       if (!filtered.length) {
-        memoList.innerHTML = '<div style="color:#8a8f8a;padding:12px 0;">没有匹配的知识库条目</div>';
+        memoList.innerHTML = `<div style="color:#8a8f8a;padding:12px 0;">${escapeHtml(tt().memoNoMatch)}</div>`;
         return;
       }
       memoList.innerHTML = filtered.map((e) => renderEntry(e)).join('');
@@ -625,18 +944,18 @@
       if (copyBtn) {
         try {
           await navigator.clipboard.writeText(command);
-          statusEl.textContent = '已复制，请手动粘贴到终端确认后执行';
+          statusEl.textContent = tt().copiedMsg;
         } catch (err) {
-          statusEl.textContent = '复制失败，请手动选中命令文本';
+          statusEl.textContent = tt().copyFailedMsg;
         }
         return;
       }
 
       if (!currentSessionId) {
-        statusEl.textContent = '请先解锁并连接终端';
+        statusEl.textContent = tt().needConnectMsg;
         return;
       }
-      statusEl.textContent = '写入中…';
+      statusEl.textContent = tt().writingMsg;
       try {
         const resp = await fetch('/api/terminal/write-command', {
           method: 'POST',
@@ -645,21 +964,21 @@
         });
         const data = await resp.json();
         if (!data.ok) {
-          const msgs = { terminal_busy_user_typing: '终端正忙（你正在手动输入），请手动粘贴命令', session_not_found: '终端会话已失效，请重新连接' };
-          statusEl.textContent = msgs[data.error] || `失败：${data.error}`;
+          const msgs = { terminal_busy_user_typing: tt().busyTypingMsg, session_not_found: tt().sessionExpiredMsg };
+          statusEl.textContent = msgs[data.error] || tt().genericFailMsg({ err: data.error });
           return;
         }
         if (data.risk === 'low' && data.executed) {
-          statusEl.textContent = '已自动执行（低风险命令）';
+          statusEl.textContent = tt().autoExecutedMsg;
         } else if (data.risk === 'medium') {
-          statusEl.textContent = '已填入终端输入框，请手动按回车确认';
+          statusEl.textContent = tt().filledWaitEnterMsg;
         } else if (data.confirmToken) {
-          statusEl.innerHTML = `高危命令，需二次确认（60秒内有效） <button class="memo-confirm-btn" data-session-token="${currentSessionId}::${data.confirmToken}">确认执行</button>`;
+          statusEl.innerHTML = `${escapeHtml(tt().highRiskConfirmMsg)}<button class="memo-confirm-btn" data-session-token="${currentSessionId}::${data.confirmToken}">${escapeHtml(tt().confirmBtnText)}</button>`;
         } else if (data.note === 'unverified_entry_copy_only') {
-          statusEl.textContent = '该条目未经人工确认，仅支持复制手动执行';
+          statusEl.textContent = tt().unverifiedCopyOnlyMsg;
         }
       } catch (err) {
-        statusEl.textContent = `请求失败：${err.message}`;
+        statusEl.textContent = tt().requestFailedMsg({ err: err.message });
       }
     });
 
@@ -669,7 +988,7 @@
       if (!confirmBtn) return;
       const [sessionId, confirmToken] = confirmBtn.getAttribute('data-session-token').split('::');
       confirmBtn.disabled = true;
-      confirmBtn.textContent = '确认中…';
+      confirmBtn.textContent = tt().confirmingMsg;
       try {
         const resp = await fetch('/api/terminal/confirm-command', {
           method: 'POST',
@@ -678,23 +997,23 @@
         });
         const data = await resp.json();
         confirmBtn.parentElement.textContent = data.ok
-          ? '已填入终端，请手动按回车确认（高危命令始终需要人工按下Enter）'
-          : `确认失败：${data.error}`;
+          ? tt().filledConfirmedMsg
+          : tt().confirmFailedMsg({ err: data.error });
       } catch (err) {
-        confirmBtn.parentElement.textContent = `请求失败：${err.message}`;
+        confirmBtn.parentElement.textContent = tt().requestFailedMsg({ err: err.message });
       }
     });
 
     async function openMemo() {
       memoOverlay.classList.add('open');
       if (kbEntries.length === 0) {
-        memoList.textContent = '加载中…';
+        memoList.textContent = tt().memoLoading;
         try {
           const resp = await fetch('/api/kb/list');
           const data = await resp.json();
           kbEntries = data.entries || [];
         } catch (err) {
-          memoList.textContent = `加载知识库失败：${err.message}`;
+          memoList.textContent = tt().memoLoadFailed({ msg: err.message });
           return;
         }
       }
