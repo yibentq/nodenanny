@@ -301,7 +301,7 @@ pm2 resurrect
 
 ## 许可证
 
-MIT
+AGPL-3.0
 
 ---
 

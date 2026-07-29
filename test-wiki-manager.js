@@ -34,12 +34,13 @@ check('没有frontmatter时,content就是原文,meta是空对象', () => {
 });
 
 // ---------- 分类树 ----------
-check('buildTree能读到3个分类,且按文件夹数字前缀排序', () => {
+check('buildTree能读到4个分类,且按文件夹数字前缀排序', () => {
   const tree = wiki.buildTree();
-  assert.strictEqual(tree.length, 3);
+  assert.strictEqual(tree.length, 4);
   assert.strictEqual(tree[0].categoryId, 'airports-and-vpn');
   assert.strictEqual(tree[1].categoryId, 'nodenanny-guide');
   assert.strictEqual(tree[2].categoryId, 'network-knowledge');
+  assert.strictEqual(tree[3].categoryId, 'compliance-and-risk');
 });
 
 check('每个分类都有_category.json里定义的title', () => {

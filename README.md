@@ -298,7 +298,7 @@ Open `PANEL_ACCESS_URL.txt` in the project directory — the access URL generate
 
 ## License
 
-MIT
+AGPL-3.0
 
 ---
 
