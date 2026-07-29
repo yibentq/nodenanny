@@ -231,7 +231,12 @@ async function diagnoseWithAnthropic(providerConfig, nodeInfo, events, lang) {
     'api.anthropic.com',
     '/v1/messages',
     { 'x-api-key': providerConfig.apiKey, 'anthropic-version': '2023-06-01' },
-    { model, max_tokens: 500, messages: [{ role: 'user', content: prompt }] },
+    // 真实bug修复(智谱GLM-4.7-Flash真机测试发现，三处一并修)：500太小。像GLM-4.7-Flash
+    // 这类"混合思考"模型，默认会先输出一段思考过程再给最终答案，思考过程本身也占用
+    // max_tokens额度——500很容易被思考过程耗光，导致真正回答内容为空，被上层emptyResult
+    // 误判成"AI返回了空结果"。调到2000留够余量。Anthropic/OpenAI官方模型本身不受影响，
+    // 但统一调整便于以后接入其它思考模型时不用逐个排查。
+    { model, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] },
     lang
   );
   const text = (resp.content || [])
@@ -251,7 +256,7 @@ async function diagnoseWithOpenAI(providerConfig, nodeInfo, events, lang) {
     'api.openai.com',
     '/v1/chat/completions',
     { Authorization: `Bearer ${providerConfig.apiKey}` },
-    { model, max_tokens: 500, messages: [{ role: 'user', content: prompt }] },
+    { model, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] },
     lang
   );
   const text = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
@@ -281,7 +286,7 @@ async function diagnoseWithOpenAICompatible(providerConfig, nodeInfo, events, la
     providerConfig.baseUrl,
     reqPath,
     { Authorization: `Bearer ${providerConfig.apiKey}` },
-    { model: rawModel, max_tokens: 500, messages: [{ role: 'user', content: prompt }] },
+    { model: rawModel, max_tokens: 2000, messages: [{ role: 'user', content: prompt }] },
     lang
   );
   const text = resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content;
