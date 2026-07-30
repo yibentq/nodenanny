@@ -184,11 +184,30 @@ function parseSubscriptionContent(text) {
   const raw = (text || '').trim();
   if (!raw) return { format: 'empty', links: [] };
 
+  // 2026-07-30新增:识别的协议前缀里加入 http/https。
+  //
+  // 背景:core/proxy-parse.js此前评估"要不要支持http/https代理链接"时,担心跟
+  // 本函数已有的"http(s)前缀=订阅链接,应该被抓取而不是当成节点"的理解冲突,
+  // 当时因为没有这份源码,没法确认,标成了"待确认,先不加"。这次拿到真实源码
+  // 核实过:本函数(以及core/目录下其他任何地方)都没有"整行内容是http(s)开头就
+  // 去二次抓取当订阅"这种逻辑——"http(s)前缀=订阅链接"这个理解只发生在更上层
+  // (config.json里配置的来源地址本身,即pool.manualSources的url字段/
+  // source-discovery.js发现的仓库文件raw地址),跟"已经抓到手的文件内容里某一行
+  // 是不是http开头"是两个完全不同的层面,互不干扰。之前担心的冲突不存在。
+  //
+  // 如实标注一个残留的已知局限,不是新引入的问题,是加了http/https之后才会
+  // 真正暴露出来的:如果抓到的内容里某一行恰好是一个"订阅链接"(比如某个机场的
+  // http://airport.com/sub?token=xxx,本身应该被当成"需要再去抓一次内容"的地址),
+  // 会被这里误判成"这是一条http代理服务器地址",按host:port去当代理服务器解析,
+  // 传给pool-checker.js三层检测——检测会因为那个host:port根本不是真实代理服务
+  // 而正常测不通,按"这条节点没通过"处理,不会引发错误或崩溃,只是白白浪费一次
+  // 检测,也错失了"其实应该展开抓取"这个机会。本项目目前没有做"识别出订阅链接
+  // 后自动展开二次抓取"这个更大的功能,如果之后要做,这是需要专门设计的另一块。
   const tryLines = (s) =>
     s
       .split(/\r?\n/)
       .map((l) => l.trim())
-      .filter((l) => /^(vless|vmess|ss|ssr|trojan|hysteria2?|hy2|tuic):\/\//i.test(l));
+      .filter((l) => /^(vless|vmess|ss|ssr|trojan|hysteria2?|hy2|tuic|https?):\/\//i.test(l));
 
   let lines = tryLines(raw);
   if (lines.length > 0) return { format: 'raw-links', links: Array.from(new Set(lines)) };

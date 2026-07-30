@@ -12,6 +12,7 @@ const { runCheck } = require('./checker');
 const terminal = require('./terminal');
 const kbManager = require('./kb-manager');
 const kbSync = require('./kb-sync');
+const sourceListSync = require('./source-list-sync');
 const wikiManager = require('./wiki-manager');
 const wikiSync = require('./wiki-sync');
 const failureReport = require('./failure-report');
@@ -435,6 +436,38 @@ function main() {
       const { acceptedIds } = req.body || {};
       const result = kbSync.applyStaging({ acceptedIds });
       if (result.ok) store.addEvent('kb_sync_applied', { count: result.appliedCount });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  // ---------- 官方节点来源列表远程同步(v39新增) ----------
+  // 跟kb-sync走完全一样的三步流程:check(只读、返回diff)→前端展示diff→人工点确认才apply。
+  // 合并对象是真实的config.json的pool.manualSources，不是config.example.json，
+  // 具体的字段清洗/去fixed逻辑都在source-list-sync.js里，这里只负责接路由。
+  app.post('/api/sources/sync/check', async (req, res) => {
+    if (!config.sourceListSync || !config.sourceListSync.rawUrl) {
+      return res.status(400).json({ ok: false, error: 'source_list_sync_not_configured' });
+    }
+    try {
+      const result = await sourceListSync.checkForUpdate(config.sourceListSync);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  app.get('/api/sources/sync/diff', (req, res) => {
+    res.json(sourceListSync.diffStagingAgainstCurrent());
+  });
+
+  // 人工确认合并——唯一会真正改动config.json的入口，前端务必先把diff完整展示给用户看过。
+  app.post('/api/sources/sync/apply', (req, res) => {
+    try {
+      const { acceptedIds } = req.body || {};
+      const result = sourceListSync.applyStaging({ acceptedIds });
+      if (result.ok) store.addEvent('source_list_sync_applied', { count: result.appliedCount });
       res.json(result);
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });

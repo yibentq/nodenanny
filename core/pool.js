@@ -29,6 +29,7 @@ const sourceTrust = require('./source-trust');
 const nodeLabelI18n = require('./node-label-i18n');
 const geoip = require('./geoip');
 const starLayout = require('./star-layout');
+const telegramFetch = require('./telegram-fetch');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const POOL_FILE = path.join(DATA_DIR, 'pool.json');
@@ -440,9 +441,37 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
   const sourceId = `manual:${manualSource.id}`;
   const timeoutMs = requestTimeoutMs || 8000;
 
+  // 2026-07-30新增:如果这条手动源的url本身是一个Telegram频道链接(t.me/频道名 或
+  // t.me/s/频道名),不是具体的订阅/节点文件直链,先用telegram-fetch.js去频道公开
+  // 预览页找"最新一条带文件附件或链接"的消息,解析出今天真实的文件URL,再交给下面
+  // 原有的repoFetch.fetchText流程按普通URL处理——对下游(parseSubscriptionContent/
+  // 去重/三层检测/试用期状态机)完全透明,它们不需要知道这条来源背后是个TG频道。
+  // telegram-fetch.js的fetchText参数需要"给URL返回Promise<string>",这里用一个
+  // 小适配器包一层repoFetch.fetchText的真实签名(返回{ok,status,text},HTTP非200
+  // 不抛异常),不新写一套HTTP客户端。
+  // 解析失败(频道改版/被限制预览/今天没有消息带链接等)按跟下面"网络层错误"完全
+  // 一致的原则处理:不喂给source-trust.js,不打断这个来源已经积累的连续达标计数
+  // (跟fetchFromDiscoveredSource/下面HTTP非200分支的既有原则保持一致)。
+  let effectiveUrl = manualSource.url;
+  if (telegramFetch.isTelegramChannelUrl(manualSource.url)) {
+    const resolved = await telegramFetch.fetchLatestFileUrl(manualSource.url, {
+      fetchText: async (url) => {
+        const r = await repoFetch.fetchText(url, timeoutMs);
+        if (!r.ok) throw new Error(`HTTP status ${r.status}`);
+        return r.text;
+      }
+    });
+    if (!resolved.ok) {
+      console.error(`[pool] ${sourceId}(手动订阅源,Telegram频道) 找不到今天的文件链接: ${resolved.error}`);
+      const state = resolveManualSourceTrust(manualSource, sourceId, null);
+      return { sourceId, passedNodes: [], candidateCount: 0, error: `telegram_resolve_failed: ${resolved.error}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown' };
+    }
+    effectiveUrl = resolved.url;
+  }
+
   let fetchResult;
   try {
-    fetchResult = await repoFetch.fetchText(manualSource.url, timeoutMs);
+    fetchResult = await repoFetch.fetchText(effectiveUrl, timeoutMs);
   } catch (err) {
     // 网络层面的问题(超时/DNS失败等),不是这个来源本身的信号,不喂给source-trust.js，
     // 避免一次网络抖动就打断这个来源已经积累的连续达标计数(跟fetchFromDiscoveredSource

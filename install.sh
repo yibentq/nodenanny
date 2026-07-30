@@ -29,6 +29,14 @@ NODE_MIN_MAJOR=18
 
 # shellcheck source=scripts/i18n.sh
 source "$INSTALL_DIR/scripts/i18n.sh"
+
+# ---------- 非交互/AI友好模式（v40新增）----------
+# 详细设计说明和ask/ask_secret/ask_yn helper函数本体都在scripts/i18n.sh里
+# （跟choose_language放在一起，因为两者都是"要不要真的调read"这同一层判断）。
+# 这里只放一句面向阅读代码的人的提示：本文件从这里往下，所有原本的
+# `read -rp`/`read -rsp` 都已经换成 `ask`/`ask_secret`/`ask_yn`，行为在
+# NN_NONINTERACTIVE!=true时跟原来的read完全一样；NN_NONINTERACTIVE=true
+# （或者stdin本来就不是终端）时才会走非交互分支。
 choose_language
 
 echo ""
@@ -158,7 +166,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   echo "=================================================================="
   echo ""
 
-  read -rp "$(m node_name_prompt)" NN_NODE_NAME
+  ask NN_NODE_NAME "$(m node_name_prompt)" "$(m node_name_default)"
   export NN_NODE_NAME="${NN_NODE_NAME:-$(m node_name_default)}"
 
   # ---------- 5a.（可选）自动部署 Xray 节点（233boy 一键脚本）----------
@@ -173,7 +181,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   echo ""
   m proxy_title
   m proxy_explain
-  read -rp "$(m proxy_ask)" NN_PROXY_CHOICE
+  ask_yn NN_PROXY_CHOICE "$(m proxy_ask)" "N"
   if [[ "$NN_PROXY_CHOICE" =~ ^[Yy]$ ]]; then
     m proxy_installing
     NN_PROXY_LOG="/tmp/nodenanny-proxy-install.log"
@@ -280,18 +288,21 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   if [ -n "$NN_PROXY_SKIPPED" ] && [ -z "$NN_DETECTED_PORT" ]; then
     echo ""
     m proxy_skip_no_service_found
-    read -rp "$(m proxy_skip_confirm_prompt)" NN_SKIP_CONFIRM
+    ask_yn NN_SKIP_CONFIRM "$(m proxy_skip_confirm_prompt)" "N"
     if [[ ! "$NN_SKIP_CONFIRM" =~ ^[Yy]$ ]]; then
       m proxy_skip_abort
+      if [ "$NN_NONINTERACTIVE" = "true" ]; then
+        echo "[nodenanny] 非交互模式下检测不到任何代理服务、也没有显式设置 NN_SKIP_CONFIRM=Y，出于安全默认不继续（避免装出一个监控着不存在端口的实例）。确认要继续的话，加上 NN_SKIP_CONFIRM=Y 重跑。" >&2
+      fi
       exit 1
     fi
   fi
 
   if [ -n "$NN_DETECTED_PORT" ]; then
-    read -rp "$(m port_prompt_detected "$NN_DETECTED_PORT")" NN_CHECK_PORT
+    ask NN_CHECK_PORT "$(m port_prompt_detected "$NN_DETECTED_PORT")" "$NN_DETECTED_PORT"
     export NN_CHECK_PORT="${NN_CHECK_PORT:-$NN_DETECTED_PORT}"
   else
-    read -rp "$(m port_prompt)" NN_CHECK_PORT
+    ask NN_CHECK_PORT "$(m port_prompt)" "443"
     export NN_CHECK_PORT="${NN_CHECK_PORT:-443}"
   fi
   export NN_CHECK_HOST="127.0.0.1"
@@ -318,23 +329,26 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   fi
   m mgmt_opt2
   m mgmt_opt3
-  read -rp "$(m mgmt_choose)" NN_MGMT_TYPE
+  ask NN_MGMT_TYPE "$(m mgmt_choose)" "1"
   NN_MGMT_TYPE="${NN_MGMT_TYPE:-1}"
 
   case "$NN_MGMT_TYPE" in
     2)
-      read -rp "$(m docker_name_prompt)" NN_SERVICE_NAME
+      ask NN_SERVICE_NAME "$(m docker_name_prompt)" "xray"
       export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
       export NN_RESTART_CMD="docker restart ${NN_SERVICE_NAME}"
       # 修复记录：核验这个容器名是不是真的存在，不存在就警告+二次确认，
       # 跟下面 systemd 分支、以及已有的自定义命令路径检查是同一个模式。
+      # 非交互模式说明：这里不是while循环，只会执行一次，所以不存在"卡死重复问"
+      # 的风险——ask_yn默认给Y（继续用检测不到的这个名字），跟原来"人直接按回车
+      # 走默认值"效果一致，不会无限循环，只是没有人能在这一步真的换一个更对的名字。
       if command -v docker >/dev/null 2>&1; then
         if ! docker inspect "$NN_SERVICE_NAME" >/dev/null 2>&1; then
           docker ps -a --format '  - {{.Names}}' 2>/dev/null
           m mgmt_docker_not_found "$NN_SERVICE_NAME"
-          read -rp "$(m custom_cmd_confirm_anyway)" NN_MGMT_CONFIRM
+          ask_yn NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
           if [[ ! "$NN_MGMT_CONFIRM" =~ ^[Yy]$ ]]; then
-            read -rp "$(m docker_name_prompt)" NN_SERVICE_NAME
+            ask NN_SERVICE_NAME "$(m docker_name_prompt)" "xray"
             export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
             export NN_RESTART_CMD="docker restart ${NN_SERVICE_NAME}"
           fi
@@ -344,19 +358,30 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
       fi
       ;;
     3)
-      read -rp "$(m custom_name_prompt)" NN_SERVICE_NAME
+      ask NN_SERVICE_NAME "$(m custom_name_prompt)" "xray"
       export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
       m custom_cmd_prompt
       # 发现3(b) 修复：如果填的是一条看起来像文件路径的命令，且这个路径在文件系统里
       # 并不存在，给一次二次确认，拦住"把题目示例文本原样抄成真实命令"这类低级错误。
+      #
+      # 非交互模式的真实风险点，本轮加固：这是本文件里唯一一处"校验失败就continue
+      # 回去重新问"的while循环。如果NN_RESTART_CMD通过环境变量被设成了一个不存在的
+      # 路径、且NN_CMD_CONFIRM又被显式设成非Y——ask()在非交互模式下不会真的重新
+      # 读到不同的值（环境变量已经有值就不会被覆盖），会导致原本"continue回去再问
+      # 一遍"的设计在这里变成真正的死循环。加一个明确的非交互模式出口：这种情况下
+      # 不再continue，直接报错退出，而不是卡死。
       while true; do
-        read -rp "> " NN_RESTART_CMD
+        ask NN_RESTART_CMD "> " ""
         NN_CMD_FIRST_TOKEN="${NN_RESTART_CMD%% *}"
         if [[ "$NN_CMD_FIRST_TOKEN" == /* ]] && [ ! -e "$NN_CMD_FIRST_TOKEN" ]; then
           m custom_cmd_path_not_found "$NN_CMD_FIRST_TOKEN"
-          read -rp "$(m custom_cmd_confirm_anyway)" NN_CMD_CONFIRM
+          ask_yn NN_CMD_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
           if [[ "$NN_CMD_CONFIRM" =~ ^[Yy]$ ]]; then
             break
+          fi
+          if [ "$NN_NONINTERACTIVE" = "true" ]; then
+            echo "[nodenanny] 非交互模式下 NN_RESTART_CMD=\"$NN_RESTART_CMD\" 指向的路径不存在，且 NN_CMD_CONFIRM 被显式设为否，没有人能在这里重新输入一个更对的命令，安装中止。请通过环境变量提供一个真实存在的 NN_RESTART_CMD 后重跑。" >&2
+            exit 1
           fi
           continue
         fi
@@ -366,21 +391,23 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
       ;;
     *)
       if [ -n "$NN_CANDIDATE_SERVICE" ]; then
-        read -rp "$(m systemd_name_prompt_candidate "$NN_CANDIDATE_SERVICE")" NN_SERVICE_NAME
+        ask NN_SERVICE_NAME "$(m systemd_name_prompt_candidate "$NN_CANDIDATE_SERVICE")" "$NN_CANDIDATE_SERVICE"
         export NN_SERVICE_NAME="${NN_SERVICE_NAME:-$NN_CANDIDATE_SERVICE}"
       else
-        read -rp "$(m systemd_name_prompt)" NN_SERVICE_NAME
+        ask NN_SERVICE_NAME "$(m systemd_name_prompt)" "xray"
         export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
       fi
       export NN_RESTART_CMD="systemctl restart ${NN_SERVICE_NAME}"
       # 修复记录：核验这个 systemd 服务名是不是真的存在（systemctl cat 对不存在的
       # unit 会返回非零退出码，不管这个服务当前是运行中还是已停止都能正确识别存在性）。
       # 不存在就警告+二次确认，避免打错字直接静默往下走、装完才发现在监控一个不存在的服务。
+      # (非交互模式说明同docker分支：这里不是while循环，只执行一次，ask_yn默认Y
+      # 不会造成死循环。)
       if ! systemctl cat "$NN_SERVICE_NAME" >/dev/null 2>&1; then
         m mgmt_systemd_not_found "$NN_SERVICE_NAME"
-        read -rp "$(m custom_cmd_confirm_anyway)" NN_MGMT_CONFIRM
+        ask_yn NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
         if [[ ! "$NN_MGMT_CONFIRM" =~ ^[Yy]$ ]]; then
-          read -rp "$(m systemd_name_prompt)" NN_SERVICE_NAME
+          ask NN_SERVICE_NAME "$(m systemd_name_prompt)" "xray"
           export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
           export NN_RESTART_CMD="systemctl restart ${NN_SERVICE_NAME}"
         fi
@@ -390,21 +417,34 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
 
   echo ""
   m panel_pw_title
-  while true; do
-    read -rsp "$(m panel_pw_prompt)" NN_PANEL_PASSWORD
-    echo ""
-    if [ -z "$NN_PANEL_PASSWORD" ]; then
-      m panel_pw_empty
-      continue
+  # 面板密码是安全关键字段，非交互模式下不能沿用"没填就悄悄用空密码"这种退让——
+  # 面板没密码等于服务器管理界面直接对公网敞开。这里单独处理：非交互模式必须
+  # 已经通过环境变量 NN_PANEL_PASSWORD 提供了非空密码，没提供就直接报错退出，
+  # 不静默继续；提供了就不需要再走"确认一遍"那道交互专属的手误保护（没有人在
+  # 打字，也就没有"手滑打错第二遍"这个问题）。
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    if [ -z "${NN_PANEL_PASSWORD:-}" ]; then
+      echo "[nodenanny] 非交互模式下必须通过环境变量 NN_PANEL_PASSWORD 提供一个非空的面板密码，不允许留空（留空等于面板对公网完全不设防）。请设置后重跑，例如：NN_NONINTERACTIVE=true NN_PANEL_PASSWORD='你的密码' bash install.sh" >&2
+      exit 1
     fi
-    read -rsp "$(m panel_pw_confirm)" NN_PANEL_PASSWORD_CONFIRM
-    echo ""
-    if [ "$NN_PANEL_PASSWORD" != "$NN_PANEL_PASSWORD_CONFIRM" ]; then
-      m panel_pw_mismatch
-      continue
-    fi
-    break
-  done
+    printf '[non-interactive] NN_PANEL_PASSWORD = (已从环境变量读取，内容不打印)\n' >&2
+  else
+    while true; do
+      read -rsp "$(m panel_pw_prompt)" NN_PANEL_PASSWORD
+      echo ""
+      if [ -z "$NN_PANEL_PASSWORD" ]; then
+        m panel_pw_empty
+        continue
+      fi
+      read -rsp "$(m panel_pw_confirm)" NN_PANEL_PASSWORD_CONFIRM
+      echo ""
+      if [ "$NN_PANEL_PASSWORD" != "$NN_PANEL_PASSWORD_CONFIRM" ]; then
+        m panel_pw_mismatch
+        continue
+      fi
+      break
+    done
+  fi
   export NN_PANEL_PASSWORD
   export NN_PANEL_PORT=8787
   export NN_PANEL_BINDHOST="127.0.0.1"
@@ -416,7 +456,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   m smtp_opt3
   m smtp_opt4
   m smtp_opt5
-  read -rp "$(m smtp_choose)" SMTP_CHOICE
+  ask SMTP_CHOICE "$(m smtp_choose)" "5"
   SMTP_CHOICE="${SMTP_CHOICE:-5}"
 
   case "$SMTP_CHOICE" in
@@ -429,56 +469,68 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
     4)
        # 发现7 修复：如果用户在"服务器地址（host）"这一项里填的内容包含 @ 符号，
        # 大概率是把"发信邮箱地址"当成了"SMTP 服务器地址"两个问题填混了，给一次警告确认。
+       #
+       # 非交互模式风险点，跟前面自定义重启命令那处一样：这是本文件第二处、
+       # 也是最后一处"校验失败就continue回去重新问"的while循环。同样加一个
+       # 非交互模式的明确出口，避免NN_SMTP_HOST_CONFIRM被显式设成非Y时死循环。
        while true; do
-         read -rp "$(m smtp_host_prompt)" NN_SMTP_HOST
+         ask NN_SMTP_HOST "$(m smtp_host_prompt)" ""
          if [[ "$NN_SMTP_HOST" == *"@"* ]]; then
            m smtp_host_looks_like_email "$NN_SMTP_HOST"
-           read -rp "$(m smtp_host_confirm_anyway)" NN_SMTP_HOST_CONFIRM
+           ask_yn NN_SMTP_HOST_CONFIRM "$(m smtp_host_confirm_anyway)" "Y"
            if [[ "$NN_SMTP_HOST_CONFIRM" =~ ^[Yy]$ ]]; then
              break
+           fi
+           if [ "$NN_NONINTERACTIVE" = "true" ]; then
+             echo "[nodenanny] 非交互模式下 NN_SMTP_HOST=\"$NN_SMTP_HOST\" 看起来是邮箱地址而不是SMTP服务器地址，且 NN_SMTP_HOST_CONFIRM 被显式设为否，没有人能在这里重新输入，安装中止。请通过环境变量提供正确的 NN_SMTP_HOST 后重跑。" >&2
+             exit 1
            fi
            continue
          fi
          break
        done
        export NN_SMTP_HOST
-       read -rp "$(m smtp_port_prompt)" NN_SMTP_PORT; export NN_SMTP_PORT="${NN_SMTP_PORT:-465}"
-       read -rp "$(m smtp_secure_prompt)" NN_SMTP_SECURE
+       ask NN_SMTP_PORT "$(m smtp_port_prompt)" "465"; export NN_SMTP_PORT="${NN_SMTP_PORT:-465}"
+       ask NN_SMTP_SECURE "$(m smtp_secure_prompt)" "true"
        export NN_SMTP_SECURE="${NN_SMTP_SECURE:-true}" ;;
     *) m smtp_skip_note ;;
   esac
 
   if [ "$SMTP_CHOICE" != "5" ]; then
-    read -rp "$(m smtp_user_prompt)" NN_SMTP_USER
+    ask NN_SMTP_USER "$(m smtp_user_prompt)" ""
     export NN_SMTP_USER
-    read -rsp "$(m smtp_pass_prompt)" NN_SMTP_PASS
-    echo ""
+    ask_secret NN_SMTP_PASS "$(m smtp_pass_prompt)" ""
     export NN_SMTP_PASS
-    read -rp "$(m smtp_to_prompt)" NN_SMTP_TO
+    ask NN_SMTP_TO "$(m smtp_to_prompt)" "$NN_SMTP_USER"
     export NN_SMTP_TO="${NN_SMTP_TO:-$NN_SMTP_USER}"
+    if [ "$NN_NONINTERACTIVE" = "true" ] && { [ -z "$NN_SMTP_USER" ] || [ -z "$NN_SMTP_PASS" ]; }; then
+      echo "[nodenanny] 提示：SMTP已选择启用（SMTP_CHOICE=$SMTP_CHOICE），但 NN_SMTP_USER/NN_SMTP_PASS 至少有一项没有从环境变量拿到值——config.json里SMTP相关字段会先留空写入，装完之后记得手动补上再重启 nodenanny-monitor，否则邮件通知发不出去。" >&2
+    fi
   fi
 
   echo ""
   m ai_title
   m ai_explain
-  read -rp "$(m ai_ask)" NN_AI_CHOICE
+  ask_yn NN_AI_CHOICE "$(m ai_ask)" "N"
   if [[ "$NN_AI_CHOICE" =~ ^[Yy]$ ]]; then
     export NN_AI_ENABLED=true
     m ai_opt1
     m ai_opt2
-    read -rp "$(m ai_provider_choose)" NN_AI_PROVIDER_CHOICE
+    ask NN_AI_PROVIDER_CHOICE "$(m ai_provider_choose)" "1"
     case "$NN_AI_PROVIDER_CHOICE" in
       2) export NN_AI_PROVIDER="openai" ;;
       *) export NN_AI_PROVIDER="anthropic" ;;
     esac
-    read -rsp "$(m ai_apikey_prompt)" NN_AI_APIKEY
-    echo ""
+    ask_secret NN_AI_APIKEY "$(m ai_apikey_prompt)" ""
     export NN_AI_APIKEY
-    read -rp "$(m ai_model_prompt)" NN_AI_MODEL
+    ask NN_AI_MODEL "$(m ai_model_prompt)" ""
     export NN_AI_MODEL
-    read -rp "$(m ai_trigger_prompt)" NN_AI_TRIGGER_AFTER
+    ask NN_AI_TRIGGER_AFTER "$(m ai_trigger_prompt)" "3"
     export NN_AI_TRIGGER_AFTER="${NN_AI_TRIGGER_AFTER:-3}"
     m ai_enabled_note
+    if [ "$NN_NONINTERACTIVE" = "true" ] && [ -z "$NN_AI_APIKEY" ]; then
+      echo "[nodenanny] 提示：AI诊断已选择启用，但 NN_AI_APIKEY 没有从环境变量拿到值——config.json里会先写成空key，AI诊断这个功能实际不会生效，装完后记得手动补上API Key再重启 nodenanny-panel。" >&2
+    fi
   else
     export NN_AI_ENABLED=false
     m ai_skip_note
@@ -510,7 +562,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
     m confirm_summary_ai_off
   fi
   echo ""
-  read -rp "$(m confirm_summary_ask)" NN_CONFIRM_SUMMARY
+  ask NN_CONFIRM_SUMMARY "$(m confirm_summary_ask)" "Y"
   NN_CONFIRM_SUMMARY="${NN_CONFIRM_SUMMARY:-Y}"
   if [[ ! "$NN_CONFIRM_SUMMARY" =~ ^[Yy]$ ]]; then
     echo ""
@@ -620,11 +672,10 @@ else
   echo ""
   m discovery_title
   m discovery_explain
-  read -rp "$(m discovery_ask)" NN_DISCOVERY_CHOICE
+  ask_yn NN_DISCOVERY_CHOICE "$(m discovery_ask)" "N"
   if [[ "$NN_DISCOVERY_CHOICE" =~ ^[Yy]$ ]]; then
     m discovery_token_explain
-    read -rsp "$(m discovery_token_ask)" NN_GITHUB_TOKEN
-    echo ""
+    ask_secret NN_GITHUB_TOKEN "$(m discovery_token_ask)" ""
     # 用环境变量传给node -e，不在shell里把token拼进JS字符串——原因跟write-config.js
     # 顶部注释一样：token内容不可控，直接拼字符串遇到引号/反斜杠会把JSON拼坏。
     NN_GITHUB_TOKEN="${NN_GITHUB_TOKEN:-}" node -e "
@@ -664,7 +715,7 @@ else
   echo ""
   m manual_source_title
   m manual_source_explain
-  read -rp "$(m manual_source_ask)" NN_MANUAL_SOURCE_CHOICE
+  ask_yn NN_MANUAL_SOURCE_CHOICE "$(m manual_source_ask)" "N"
   if [[ "$NN_MANUAL_SOURCE_CHOICE" =~ ^[Yy]$ ]]; then
     NN_POOL_MANUAL_SOURCES_ENABLED=true node -e "
       const fs=require('fs');
@@ -728,7 +779,7 @@ echo ""
 m access_opt1
 m access_opt2
 m access_opt3
-read -rp "$(m access_choose)" NN_ACCESS_CHOICE
+ask NN_ACCESS_CHOICE "$(m access_choose)" "2"
 NN_ACCESS_CHOICE="${NN_ACCESS_CHOICE:-2}"
 
 SERVER_IP_HINT=$(curl -fsSL -4 ifconfig.me 2>/dev/null || hostname -I | awk '{print $1}')
@@ -739,7 +790,14 @@ ACCESS_RETRY_CMD=""
 
 case "$NN_ACCESS_CHOICE" in
   1)
-    read -rp "$(m access_domain_prompt)" NN_DOMAIN
+    ask NN_DOMAIN "$(m access_domain_prompt)" ""
+    # 域名没有一个"安全的默认值"可以兜底（不像端口/服务名那些至少有个合理猜测），
+    # 非交互模式下如果选了"域名模式"却没给域名，与其往下传一个空字符串让
+    # setup-reverse-proxy.sh用一种未经测试过的方式失败，不如在这里就报清楚。
+    if [ "$NN_NONINTERACTIVE" = "true" ] && [ -z "$NN_DOMAIN" ]; then
+      echo "[nodenanny] 非交互模式下 NN_ACCESS_CHOICE=1（域名模式）但没有提供 NN_DOMAIN，无法继续。请通过环境变量提供域名，或改用 NN_ACCESS_CHOICE=2（IP模式，无需域名）后重跑。" >&2
+      exit 1
+    fi
     ACCESS_ATTEMPTED=true
     ACCESS_RETRY_CMD="bash \"$INSTALL_DIR/scripts/setup-reverse-proxy.sh\" domain \"$NN_DOMAIN\""
     # 发现26修复（本轮真机测试发现）：原来这里用 `... || true`，子脚本因为

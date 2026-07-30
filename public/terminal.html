@@ -731,6 +731,25 @@
     const fitAddon = new FitAddon.FitAddon();
     term.loadAddon(fitAddon);
     term.open(document.getElementById('terminal-container'));
+
+    // 2026-07-30修复：真实bug——term.onData()的注册原本写在connectWebSocket()
+    // 函数体内部（见下方原本817行附近）。term这个xterm实例本身在整个页面生命周期
+    // 里只创建一次，但connectWebSocket()会在每次"解锁并连接"、以及每次断线后
+    // 用户重新解锁重连时被再次调用——而term.onData()每调一次就会再挂一个新的
+    // 监听器，旧的那个从来没有被移除。于是：只连接过一次的会话完全正常（只有
+    // 一个监听器）；但凡重连过一次，后续每一次按键或粘贴，onData都会被触发
+    // 两次（两个监听器各发一次），表现出来就是"粘贴的内容被插入了两遍、中间
+    // 没有换行"——这正是founder反馈的那个bug。重连第二次会变成三个监听器、
+    // 三次重复，以此类推。
+    // 修复方式：把onData的注册挪到这里，只在term创建时执行一次，处理函数内部
+    // 通过闭包读取外层的ws变量（跟原来完全一样的判断：ws存在且readyState是
+    // OPEN才发送），不需要access到connectWebSocket()内部的任何东西，可以安全
+    // 挪出来。
+    term.onData((data) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input', data }));
+      }
+    });
     // 之前这里是 term.open() 之后立刻同步调用 fitAddon.fit()——这个bug会导致
     // xterm 在容器还没有完成真正的flex布局分配（此时读到的宽度可能是0或者
     // 不准确的初始值）时就去计算列数，算出"1列、高度撑满"这种畸形尺寸，
@@ -813,12 +832,6 @@
       ws.onerror = () => {
         setStatusBadge('error', tt().statusError);
       };
-
-      term.onData((data) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'input', data }));
-        }
-      });
     }
 
     function sendResize() {

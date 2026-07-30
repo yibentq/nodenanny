@@ -1300,6 +1300,16 @@
           <button class="sync-btn sync-btn-confirm" id="sync-wiki-apply-btn" style="display:none;"></button>
         </div>
       </div>
+
+      <div class="sync-section">
+        <h3 id="sync-sources-title"></h3>
+        <div class="sync-status" id="sync-sources-status"></div>
+        <div class="sync-result" id="sync-sources-result"></div>
+        <div class="sync-actions">
+          <button class="sync-btn" id="sync-sources-check-btn"></button>
+          <button class="sync-btn sync-btn-confirm" id="sync-sources-apply-btn" style="display:none;"></button>
+        </div>
+      </div>
     </div>
 
     <div class="sync-card">
@@ -1441,6 +1451,13 @@ const I18N = {
     syncAppliedWiki: (dl,rm) => `已覆盖完成：更新 ${dl} 个文件${rm > 0 ? `、删除 ${rm} 个文件` : ''}`,
     syncErrorPrefix: '同步出错：',
     syncLastAppliedWiki: (t) => `上次同步：${t}`,
+    syncSourcesTitle: '节点来源列表同步',
+    syncNotConfiguredSources: '尚未配置节点来源同步（config.json 里的 sourceListSync.rawUrl）',
+    syncUpToDateSources: (n) => `已是最新，当前共有 ${n} 个候选来源`,
+    syncHasUpdateSources: (a,m,r) => `发现更新：新增 ${a} 个、修改 ${m} 个、移除 ${r} 个，点击下面按钮确认合并`,
+    syncApplySourcesBtn: '确认合并',
+    syncAppliedSources: (n) => `已合并 ${n} 个来源，会走完整的试用期检测，不会直接信任`,
+    syncSourcesConflictNote: (n) => `另有 ${n} 个跟你已有的手动来源 ID 冲突，为安全起见未合并，需要你自己确认后处理`,
     reportTitle: '故障报告',
     reportHint: '把当前状态、最近事件、已尝试的自愈动作、AI诊断结论(如果有)自动整理成一段文字，方便你直接粘贴到论坛帖子里寻求帮助。',
     reportGenerateBtn: '生成报告',
@@ -1477,6 +1494,7 @@ const I18N = {
       usability_restart_suggested: p => `二层可用性检测连续多次未通过——这不会触发自动重启（重启对这类情况大概率没用），仅提醒你人工看一眼${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
       usability_auto_restart: p => `二层可用性检测持续异常，NodeNanny 已自动重启一次本地代理${p.restartOk ? '（重启命令执行成功）' : '（重启命令执行失败，需要人工检查）'}${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
       kb_sync_applied: p => `知识库远程同步已合并 ${p.count} 条内容`,
+      source_list_sync_applied: p => `官方节点来源列表已合并 ${p.count} 个来源，会走完整试用期检测`,
       wiki_sync_applied: p => `Wiki 百科远程同步已应用：更新 ${p.downloaded} 个文件${p.removed > 0 ? `、删除 ${p.removed} 个文件` : ''}`,
       info: p => p.message || ''
     }
@@ -1562,6 +1580,13 @@ const I18N = {
     syncAppliedWiki: (dl,rm) => `Overwrite complete: ${dl} files updated${rm > 0 ? `, ${rm} files removed` : ''}`,
     syncErrorPrefix: 'Sync error: ',
     syncLastAppliedWiki: (t) => `Last synced: ${t}`,
+    syncSourcesTitle: 'Source list sync',
+    syncNotConfiguredSources: 'Source list sync is not configured (sourceListSync.rawUrl in config.json)',
+    syncUpToDateSources: (n) => `Up to date — ${n} candidate source(s) currently listed`,
+    syncHasUpdateSources: (a,m,r) => `Update available: ${a} added, ${m} modified, ${r} removed — click below to confirm merge`,
+    syncApplySourcesBtn: 'Confirm merge',
+    syncAppliedSources: (n) => `Merged ${n} source(s) — they'll go through the full trial period, not trusted automatically`,
+    syncSourcesConflictNote: (n) => `${n} other source(s) share an ID with one you added manually and were skipped for safety — please review them yourself`,
     reportTitle: 'Failure Report',
     reportHint: 'Automatically assemble current status, recent events, self-healing actions already tried, and the latest AI diagnosis (if any) into text you can paste directly into a forum post.',
     reportGenerateBtn: 'Generate report',
@@ -1598,6 +1623,7 @@ const I18N = {
       usability_restart_suggested: p => `Layer-2 usability check has failed repeatedly — this will not trigger an automatic restart (unlikely to help for this kind of issue), just a heads-up to take a manual look${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       usability_auto_restart: p => `Layer-2 usability check has been persistently failing — NodeNanny automatically restarted the local proxy once${p.restartOk ? ' (restart command succeeded)' : ' (restart command failed, manual check needed)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       kb_sync_applied: p => `Knowledge base sync merged ${p.count} ${p.count === 1 ? 'entry' : 'entries'}`,
+      source_list_sync_applied: p => `Official source list sync merged ${p.count} source(s) — they'll go through the full trial period`,
       wiki_sync_applied: p => `Wiki sync applied: ${p.downloaded} file${p.downloaded === 1 ? '' : 's'} updated${p.removed > 0 ? `, ${p.removed} removed` : ''}`,
       info: p => p.message || ''
     }
@@ -1683,6 +1709,13 @@ const I18N = {
     syncAppliedWiki: (dl,rm) => `上書き完了：${dl} 個のファイルを更新${rm > 0 ? `、${rm} 個のファイルを削除` : ''}`,
     syncErrorPrefix: '同期エラー：',
     syncLastAppliedWiki: (t) => `前回の同期：${t}`,
+    syncSourcesTitle: 'ノード提供元リストの同期',
+    syncNotConfiguredSources: 'ノード提供元の同期が未設定です（config.json の sourceListSync.rawUrl）',
+    syncUpToDateSources: (n) => `最新です。現在 ${n} 件の候補ソースがあります`,
+    syncHasUpdateSources: (a,m,r) => `更新が見つかりました：追加 ${a} 件、変更 ${m} 件、削除 ${r} 件。下のボタンでマージを確定してください`,
+    syncApplySourcesBtn: 'マージを確定',
+    syncAppliedSources: (n) => `${n} 件のソースをマージしました。自動的に信頼されるわけではなく、通常の試用期間の検証を経ます`,
+    syncSourcesConflictNote: (n) => `他 ${n} 件は手動で追加済みのソースとIDが重複しているため、安全のためマージされませんでした。ご自身でご確認ください`,
     reportTitle: '障害レポート',
     reportHint: '現在の状態・最近のイベント・これまでに試みた自己修復アクション・直近のAI診断結果(あれば)を自動でまとめ、フォーラムへの投稿にそのまま貼り付けられるテキストを生成します。',
     reportGenerateBtn: 'レポートを生成',
@@ -1719,6 +1752,7 @@ const I18N = {
       usability_restart_suggested: p => `二層可用性チェックが連続して失敗しています——自動再起動は行われません（この種の問題には再起動はほとんど役に立たないため）。手動での確認をおすすめします${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
       usability_auto_restart: p => `二層可用性チェックが持続的に異常です。NodeNannyがローカルのプロキシを自動的に一度再起動しました${p.restartOk ? '（再起動コマンドは成功）' : '（再起動コマンドが失敗、手動確認が必要）'}${p.detail ? '（' + p.detail + '）' : ''}${kbSuggestionSuffix(p.kb)}`,
       kb_sync_applied: p => `ナレッジベース同期を ${p.count} 件マージしました`,
+      source_list_sync_applied: p => `公式ノード提供元リストを ${p.count} 件マージしました。通常の試用期間の検証を経ます`,
       wiki_sync_applied: p => `Wiki同期を適用しました：${p.downloaded} 個のファイルを更新${p.removed > 0 ? `、${p.removed} 個を削除` : ''}`,
       info: p => p.message || ''
     }
@@ -1804,6 +1838,13 @@ const I18N = {
     syncAppliedWiki: (dl,rm) => `Überschreiben abgeschlossen: ${dl} Dateien aktualisiert${rm > 0 ? `, ${rm} Dateien entfernt` : ''}`,
     syncErrorPrefix: 'Sync-Fehler: ',
     syncLastAppliedWiki: (t) => `Zuletzt synchronisiert: ${t}`,
+    syncSourcesTitle: 'Quellenlisten-Synchronisierung',
+    syncNotConfiguredSources: 'Die Quellenlisten-Synchronisierung ist nicht konfiguriert (sourceListSync.rawUrl in config.json)',
+    syncUpToDateSources: (n) => `Aktuell — derzeit ${n} Kandidatenquelle(n) gelistet`,
+    syncHasUpdateSources: (a,m,r) => `Update verfügbar: ${a} hinzugefügt, ${m} geändert, ${r} entfernt — unten bestätigen`,
+    syncApplySourcesBtn: 'Zusammenführung bestätigen',
+    syncAppliedSources: (n) => `${n} Quelle(n) zusammengeführt — sie durchlaufen die volle Testphase und werden nicht automatisch vertraut`,
+    syncSourcesConflictNote: (n) => `${n} weitere Quelle(n) teilen sich eine ID mit einer manuell hinzugefügten Quelle und wurden zur Sicherheit nicht zusammengeführt — bitte selbst prüfen`,
     reportTitle: 'Ausfallbericht',
     reportHint: 'Fasst den aktuellen Status, jüngste Ereignisse, bereits versuchte Selbstheilungs-Maßnahmen und die letzte KI-Diagnose (falls vorhanden) automatisch zu einem Text zusammen, den Sie direkt in einen Forenbeitrag einfügen können.',
     reportGenerateBtn: 'Bericht erstellen',
@@ -1840,6 +1881,7 @@ const I18N = {
       usability_restart_suggested: p => `Die Layer-2-Nutzbarkeitsprüfung ist wiederholt fehlgeschlagen — dies löst keinen automatischen Neustart aus (bei dieser Art von Problem hilft ein Neustart wahrscheinlich nicht). Ein manueller Blick lohnt sich${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       usability_auto_restart: p => `Die Layer-2-Nutzbarkeitsprüfung schlägt anhaltend fehl — NodeNanny hat den lokalen Proxy automatisch einmal neu gestartet${p.restartOk ? ' (Neustart-Befehl erfolgreich)' : ' (Neustart-Befehl fehlgeschlagen, manuelle Prüfung nötig)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       kb_sync_applied: p => `Wissensdatenbank-Sync: ${p.count} Einträge zusammengeführt`,
+      source_list_sync_applied: p => `Offizielle Quellenliste synchronisiert: ${p.count} Quelle(n) zusammengeführt — durchlaufen die volle Testphase`,
       wiki_sync_applied: p => `Wiki-Sync angewendet: ${p.downloaded} Datei(en) aktualisiert${p.removed > 0 ? `, ${p.removed} entfernt` : ''}`,
       info: p => p.message || ''
     }
@@ -1925,6 +1967,13 @@ const I18N = {
     syncAppliedWiki: (dl,rm) => `Перезапись завершена: обновлено файлов ${dl}${rm > 0 ? `, удалено файлов ${rm}` : ''}`,
     syncErrorPrefix: 'Ошибка синхронизации: ',
     syncLastAppliedWiki: (t) => `Последняя синхронизация: ${t}`,
+    syncSourcesTitle: 'Синхронизация списка источников',
+    syncNotConfiguredSources: 'Синхронизация списка источников не настроена (sourceListSync.rawUrl в config.json)',
+    syncUpToDateSources: (n) => `Актуально — сейчас ${n} источник(ов)-кандидатов`,
+    syncHasUpdateSources: (a,m,r) => `Найдено обновление: добавлено ${a}, изменено ${m}, удалено ${r} — подтвердите слияние ниже`,
+    syncApplySourcesBtn: 'Подтвердить слияние',
+    syncAppliedSources: (n) => `Объединено источников: ${n} — они пройдут полный пробный период, а не станут доверенными автоматически`,
+    syncSourcesConflictNote: (n) => `Ещё ${n} источник(ов) имеют тот же ID, что и добавленные вручную, и не были объединены в целях безопасности — проверьте их самостоятельно`,
     reportTitle: 'Отчёт о сбое',
     reportHint: 'Автоматически собирает текущий статус, последние события, уже предпринятые действия самовосстановления и последний вывод AI-диагностики (если есть) в текст, который можно сразу вставить в сообщение на форуме.',
     reportGenerateBtn: 'Сформировать отчёт',
@@ -1961,6 +2010,7 @@ const I18N = {
       usability_restart_suggested: p => `Проверка реальной доступности не проходит несколько раз подряд — это не вызовет автоматический перезапуск (в таком случае перезапуск вряд ли поможет). Стоит проверить вручную${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       usability_auto_restart: p => `Проверка реальной доступности постоянно не проходит — NodeNanny автоматически перезапустил локальный прокси один раз${p.restartOk ? ' (команда перезапуска выполнена успешно)' : ' (команда перезапуска не выполнилась, нужна ручная проверка)'}${p.detail ? ' (' + p.detail + ')' : ''}${kbSuggestionSuffix(p.kb)}`,
       kb_sync_applied: p => `Синхронизация базы знаний: объединено записей — ${p.count}`,
+      source_list_sync_applied: p => `Официальный список источников синхронизирован: объединено ${p.count} — пройдут полный пробный период`,
       wiki_sync_applied: p => `Синхронизация вики применена: обновлено файлов — ${p.downloaded}${p.removed > 0 ? `, удалено — ${p.removed}` : ''}`,
       info: p => p.message || ''
     }
@@ -2039,6 +2089,7 @@ function renderStatic() {
   document.getElementById('sync-title').textContent = d.syncTitle;
   renderSyncKb();
   renderSyncWiki();
+  renderSyncSources();
 
   document.getElementById('report-title').textContent = d.reportTitle;
   document.getElementById('report-hint').textContent = d.reportHint;
@@ -2070,7 +2121,7 @@ function renderLog(events) {
     pool_activated: '⇄', pool_deactivated: '⇄', pool_refreshed: '↻', pool_refresh_failed: '!', pool_unavailable: '!',
     ai_diagnosis: '✦', ai_diagnosis_failed: '!',
     usability_ok: '✓', usability_down: '⚠', usability_check_error: '!', usability_restart_suggested: '!', usability_auto_restart: '↻',
-    kb_sync_applied: '⇄', wiki_sync_applied: '⇄',
+    kb_sync_applied: '⇄', wiki_sync_applied: '⇄', source_list_sync_applied: '⇄',
     info: '·'
   };
   list.innerHTML = events.map(ev => {
@@ -2492,6 +2543,9 @@ async function loadStarmap() {
 // wiki-sync走"check→看diff→确认覆盖"两步——跟各自后端模块文件头注释描述的流程一致。
 let syncKbState = { checked: false, hasUpdate: false, applied: false, entryCount: 0, added: 0, modified: 0, removed: 0, appliedCount: 0, error: null };
 let syncWikiState = { checked: false, hasUpdate: false, applied: false, trackedFileCount: 0, added: 0, changed: 0, removed: 0, downloadedCount: 0, removedCount: 0, error: null, lastAppliedAt: null };
+// 官方节点来源列表同步(v39新增)：走的是跟kb-sync一模一样的"check→diff→人工确认合并"三步流程，
+// 合并对象是真实config.json里的pool.manualSources，见core/source-list-sync.js。
+let syncSourcesState = { checked: false, hasUpdate: false, applied: false, sourceCount: 0, added: 0, modified: 0, removed: 0, appliedCount: 0, error: null };
 
 function renderSyncKb() {
   const d = t();
@@ -2597,6 +2651,57 @@ function renderSyncWiki() {
   }
 }
 
+function renderSyncSources() {
+  const d = t();
+  const statusEl = document.getElementById('sync-sources-status');
+  const resultEl = document.getElementById('sync-sources-result');
+  const checkBtn = document.getElementById('sync-sources-check-btn');
+  const applyBtn = document.getElementById('sync-sources-apply-btn');
+
+  document.getElementById('sync-sources-title').textContent = d.syncSourcesTitle;
+  if (!checkBtn.disabled) checkBtn.textContent = d.syncCheckBtn;
+  if (!applyBtn.disabled) applyBtn.textContent = d.syncApplySourcesBtn;
+  resultEl.classList.remove('sync-error');
+
+  if (syncSourcesState.error === 'source_list_sync_not_configured') {
+    statusEl.textContent = d.syncNotConfiguredSources;
+    resultEl.textContent = '';
+    checkBtn.style.display = 'none';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  checkBtn.style.display = '';
+
+  if (syncSourcesState.applied) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncAppliedSources(syncSourcesState.appliedCount);
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncSourcesState.error) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncErrorPrefix + syncSourcesState.error;
+    resultEl.classList.add('sync-error');
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (!syncSourcesState.checked) {
+    statusEl.textContent = d.syncNeverChecked;
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+    return;
+  }
+  if (syncSourcesState.hasUpdate) {
+    statusEl.textContent = '';
+    resultEl.textContent = d.syncHasUpdateSources(syncSourcesState.added, syncSourcesState.modified, syncSourcesState.removed);
+    applyBtn.style.display = '';
+  } else {
+    statusEl.textContent = d.syncUpToDateSources(syncSourcesState.sourceCount);
+    resultEl.textContent = '';
+    applyBtn.style.display = 'none';
+  }
+}
+
 // wiki-sync有持久化的本地状态(getStatus读data/wiki-sync-state.json)，进面板时先拉一次，
 // 这样"上次同步时间/追踪文件数"不用等用户手动点检查才看得到。kb-sync后端没有对应的
 // 只读status接口(只有check/diff/apply)，保持"还没检查过"的初始文案即可，不额外造接口。
@@ -2663,6 +2768,55 @@ document.getElementById('sync-kb-apply-btn').addEventListener('click', async (e)
   } finally {
     btn.disabled = false;
     renderSyncKb();
+  }
+});
+
+document.getElementById('sync-sources-check-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncCheckingBtn;
+  try {
+    const res = await fetch('/api/sources/sync/check', { method: 'POST' });
+    const data = await res.json();
+    if (!data.ok) {
+      syncSourcesState = { checked: true, error: data.error || 'unknown_error' };
+    } else if (data.hasUpdate) {
+      const diffRes = await fetch('/api/sources/sync/diff');
+      const diff = await diffRes.json();
+      syncSourcesState = diff.ok
+        ? { checked: true, hasUpdate: true, added: diff.added.length, modified: diff.modified.length, removed: diff.removed.length, sourceCount: data.sourceCount, error: null }
+        : { checked: true, error: diff.error || 'diff_failed' };
+    } else {
+      syncSourcesState = { checked: true, hasUpdate: false, sourceCount: data.sourceCount, error: null };
+    }
+  } catch (err) {
+    syncSourcesState = { checked: true, error: err.message };
+  } finally {
+    btn.disabled = false;
+    renderSyncSources();
+  }
+});
+
+document.getElementById('sync-sources-apply-btn').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  const d = t();
+  btn.disabled = true;
+  btn.textContent = d.syncApplyingBtn;
+  try {
+    const res = await fetch('/api/sources/sync/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+    });
+    const data = await res.json();
+    syncSourcesState = data.ok
+      ? { checked: true, applied: true, appliedCount: data.appliedCount, error: null }
+      : { checked: true, error: data.error || 'apply_failed' };
+    if (data.ok) await refresh(); // 事件日志里会多一条source_list_sync_applied，顺手刷新一下
+  } catch (err) {
+    syncSourcesState = { checked: true, error: err.message };
+  } finally {
+    btn.disabled = false;
+    renderSyncSources();
   }
 });
 

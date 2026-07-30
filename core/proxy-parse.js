@@ -16,8 +16,38 @@
 //   老式全串 base64(ss://base64(method:password@host:port))两种。
 // - trojan:支持 tls,tcp/ws/grpc transport。
 // - hysteria2:支持 hysteria2:// 和 hy2:// 两种 scheme。
+// - hysteria(v1,2026-07-30新增):按最常见的auth/peer/upmbps/downmbps字段写法解析,
+//   没有真实样本验证过,格式本身业界写法就不算统一,遇到解析不出的v1链接不代表
+//   一定是bug,也可能是某个分享工具用了这里没覆盖到的字段名写法。
 // - tuic:支持标准 tuic://uuid:password@host:port 格式。
-// - ssr、vless 的 xtls-rprx 系列老 flow、其他冷门协议:本版本不解析,返回 null。
+// - anytls(2026-07-30新增):sing-box团队自己维护的协议,官方文档(anytls-go仓库
+//   docs/uri_scheme.md)有明确的单行URI格式:anytls://密码@host:port/?sni=..&insecure=1#tag,
+//   照官方格式实现,不是猜的。
+// - socks5(2026-07-30新增):标准 socks5://[user:pass@]host:port,sing-box原生支持
+//   socks outbound,顺手加上,节点列表里偶尔会混进来。
+// - ssr:本版本仍不解析,原因不是"没空写",是sing-box官方发行版本身不支持SSR
+//   协议(需要额外参数单独编译),就算解析出来也没法用现有检测引擎测试连通性,
+//   写了也用不上,2026-07-30确认过后明确按"不做"处理,而不是遗漏。
+// - shadowtls(2026-07-30评估后明确不做):查证后确认这个协议在业界根本没有
+//   统一的单行分享链接格式——它必须跟shadowsocks链式组合使用,实际分发方式
+//   要么是完整的两段式JSON配置,要么是Surge/Loon客户端专属的一整行参数字符串
+//   (如 "ss, host, port, encrypt-method=..., shadow-tls-password=..."),
+//   都不符合本模块"一条链接→一个sing-box outbound JSON"的设计前提。写一个
+//   假想的"shadowtls://"解析器等于自己发明一个不存在的标准,节点列表里也不会
+//   真的出现这种链接,纯属空转,明确按"不做"处理。
+// - http/https 代理链接(2026-07-30本次会话核实并实现,之前"待确认"的疑虑已解决):
+//   拿到了core/repo-fetch.js的真实源码核实过,它的parseSubscriptionContent()
+//   并没有"整行内容是http(s)开头就当成订阅链接去二次抓取"这种逻辑——那种理解
+//   只发生在更上层(config.json里配置的来源地址本身),跟"内容里某一行是不是
+//   http开头"是两回事,不会冲突,之前的顾虑不成立。标准写法
+//   http(s)://[user:pass@]host:port,https://额外把tls.enabled置true,
+//   sing-box outbound type是"http"。如实标注一个不是bug、是设计取舍的残留
+//   局限:如果抓到的内容里混进一条"其实是订阅链接"的http(s)地址(不是真实代理
+//   服务器,而是还需要再抓一次内容的地址),会被误判成代理服务器地址去解析,
+//   实际检测时因为host:port不是真实代理服务会正常测不过,不会报错或崩溃,
+//   只是白白浪费一次检测机会——本项目目前没有"识别出是订阅链接后自动展开
+//   二次抓取"这个功能,这个局限跟repo-fetch.js那边保持一致的记录方式,不重复展开。
+// - vless 的 xtls-rprx 系列老 flow、其他冷门协议:本版本不解析,返回 null。
 //
 // 解析失败或协议不支持时统一返回 null,调用方(pool-checker.js)应当把这种情况
 // 当作"这条节点本版本测不了",标 unsupported,不是当成检测失败。
@@ -292,6 +322,130 @@ function parseTuic(link) {
   return { type: 'tuic', tag: extractTag(link), outbound };
 }
 
+// 本轮新增(2026-07-30):hysteria(v1)协议解析,区别于已支持的hysteria2/hy2。
+// v1协议已被上游标注为过时,格式也不如hysteria2标准化,不同分享工具生成的
+// 链接字段名有差异,这里按目前观察到的最常见写法实现(auth字段做鉴权凭据,
+// peer/sni做证书域名,upmbps/downmbps是v1特有的带宽声明字段,没有对应真实
+// 样本验证过,如实标注这一点,不要当成跟vless/ss/trojan一样验证过的部分)。
+function parseHysteria(link) {
+  const url = safeUrl(link);
+  if (!url) return null;
+  const address = url.hostname;
+  const port = Number(url.port);
+  if (!address || !port) return null;
+
+  const p = url.searchParams;
+  const auth = p.get('auth') || decodeURIComponent(url.username || '');
+  const sni = p.get('peer') || p.get('sni') || address;
+
+  const outbound = {
+    type: 'hysteria',
+    server: address,
+    server_port: port,
+    auth_str: auth || undefined,
+    up_mbps: Number(p.get('upmbps')) || undefined,
+    down_mbps: Number(p.get('downmbps')) || undefined,
+    obfs: p.get('obfs') || undefined,
+    tls: { enabled: true, server_name: sni, insecure: p.get('insecure') === '1' }
+  };
+
+  return { type: 'hysteria', tag: extractTag(link), outbound };
+}
+
+// 本轮新增(2026-07-30):anytls协议解析。格式照anytls-go官方文档
+// (docs/uri_scheme.md)实现:anytls://password@host:port/?sni=..&insecure=1&fp=..#tag,
+// 密码放在URI的用户名部分(userinfo),跟trojan的写法类似。这个格式是官方定义的,
+// 不是从社区分享工具反推的,置信度比hysteria(v1)那种高。
+function parseAnyTls(link) {
+  const url = safeUrl(link);
+  if (!url) return null;
+  const password = decodeURIComponent(url.username || '');
+  const address = url.hostname;
+  const port = Number(url.port) || 443; // 官方文档:端口省略时默认443
+  if (!password || !address) return null;
+
+  const p = url.searchParams;
+  // 官方文档特别注明:当sni的值是IP地址时,客户端必须不发送SNI——这里只做
+  // 字段透传,是否要按这条规则清空sni留给下游sing-box/调用方处理,不在这里
+  // 硬编码判断"像不像IP地址"这种容易出错的逻辑。
+  const sni = p.get('sni') || address;
+
+  const outbound = {
+    type: 'anytls',
+    server: address,
+    server_port: port,
+    password,
+    tls: { enabled: true, server_name: sni, insecure: p.get('insecure') === '1' }
+  };
+
+  return { type: 'anytls', tag: extractTag(link), outbound };
+}
+
+// 本轮新增(2026-07-30):socks5代理链接解析。标准写法 socks5://[user:pass@]host:port,
+// 认证信息可选(裸机场/开放代理常见不带认证)。sing-box outbound type是"socks",
+// 这里固定写version:"5"(不解析没有认证信息版本号的老式socks4链接,遇到就返回null)。
+function parseSocks5(link) {
+  const url = safeUrl(link);
+  if (!url) return null;
+  const address = url.hostname;
+  const port = Number(url.port);
+  if (!address || !port) return null;
+
+  const username = url.username ? decodeURIComponent(url.username) : '';
+  const password = url.password ? decodeURIComponent(url.password) : '';
+
+  const outbound = {
+    type: 'socks',
+    server: address,
+    server_port: port,
+    version: '5'
+  };
+  // 认证信息是可选的,没有就不加这两个字段(sing-box允许匿名socks5)。
+  if (username) outbound.username = username;
+  if (password) outbound.password = password;
+
+  return { type: 'socks5', tag: extractTag(link), outbound };
+}
+
+// 本轮新增(2026-07-30):http/https代理链接解析。标准写法
+// http(s)://[user:pass@]host:port,认证信息可选(裸机场/开放代理常见不带认证,
+// 写法跟socks5的处理方式保持一致)。https://和http://解析逻辑完全一样,唯一
+// 区别是https://要求开启tls(走"HTTP CONNECT over TLS"这种常见的加密HTTP代理
+// 形态,sing-box的http outbound原生支持tls字段)。见文件头本次会话的说明:
+// 已核实跟repo-fetch.js的自动格式识别不冲突,可以放心加。
+function parseHttpProxy(link) {
+  const url = safeUrl(link);
+  if (!url) return null;
+  const address = url.hostname;
+  const isHttps = link.toLowerCase().startsWith('https://');
+  // 如实标注一个测试时发现的真实坑,不是想当然写的:JS内置URL在端口正好等于
+  // scheme默认端口时(http的80/https的443),url.port会是空字符串,不是"80"/"443"
+  // 这两个字符串——如果这里直接Number(url.port),遇到没写端口号但实际是走标准
+  // 端口的链接(比如https://host,不带:443)会变成Number('')===0,被下面的
+  // !port误判成"没端口,解析失败",返回null——链接其实完全合法,是这里的默认值
+  // 处理漏了。用跟parseAnyTls同样的写法(Number(url.port) || 默认端口)修掉,
+  // 两处保持一致的处理方式。
+  const port = Number(url.port) || (isHttps ? 443 : 80);
+  if (!address) return null;
+  const username = url.username ? decodeURIComponent(url.username) : '';
+  const password = url.password ? decodeURIComponent(url.password) : '';
+
+  const outbound = {
+    type: 'http',
+    server: address,
+    server_port: port
+  };
+  // 认证信息可选,没有就不加这两个字段(sing-box允许匿名http代理)。
+  if (username) outbound.username = username;
+  if (password) outbound.password = password;
+  if (isHttps) {
+    const p = url.searchParams;
+    outbound.tls = { enabled: true, server_name: p.get('sni') || address, insecure: p.get('insecure') === '1' };
+  }
+
+  return { type: isHttps ? 'https' : 'http', tag: extractTag(link), outbound };
+}
+
 const PARSERS = [
   { prefix: 'vless://', fn: parseVless },
   { prefix: 'vmess://', fn: parseVmess },
@@ -299,7 +453,14 @@ const PARSERS = [
   { prefix: 'trojan://', fn: parseTrojan },
   { prefix: 'hysteria2://', fn: parseHysteria2 },
   { prefix: 'hy2://', fn: parseHysteria2 },
-  { prefix: 'tuic://', fn: parseTuic }
+  { prefix: 'hysteria://', fn: parseHysteria },
+  { prefix: 'tuic://', fn: parseTuic },
+  { prefix: 'anytls://', fn: parseAnyTls },
+  { prefix: 'socks5://', fn: parseSocks5 },
+  // 'http://'和'https://'字符串本身互不为对方前缀('https:'比'http:'多一个's',
+  // startsWith判断不会互相误命中),两条顺序前后放都一样,这里就按字母顺序放。
+  { prefix: 'http://', fn: parseHttpProxy },
+  { prefix: 'https://', fn: parseHttpProxy }
 ];
 
 // 主入口:给一条分享链接,返回 { type, tag, outbound } 或 null(不支持/解析失败)。

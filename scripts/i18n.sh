@@ -13,7 +13,112 @@
 
 declare -A MSG
 
+# ---------- 非交互/AI友好模式（v40新增，此前一直在交接文档"明确范围外"清单里，
+# 本轮由founder亲口要求实现）----------
+# 背景：install.sh从头到尾是纯交互式的——十几处read -rp/read -rsp，专门给"人坐在
+# 终端前一步步回答"设计。如果AI/脚本想自动化跑这个安装（比如CI、批量部署、或者
+# 别的AI agent代掉人去操作），没有任何办法跳过这些问答，卡在第一个read就动不了。
+#
+# 设计思路：不改变默认行为——什么都不设置的时候，跟以前一模一样，正常交互问答。
+# 只有满足下面任一条件才会切换成非交互模式：
+#   1) 显式设置 NN_NONINTERACTIVE=true（推荐：AI/脚本调用方明确声明意图，而不是
+#      靠环境自动猜，这样行为可预期、可复现）；
+#   2) stdin本身就不是一个真终端（[ ! -t 0 ]，比如整个install.sh是被管道/heredoc/
+#      CI runner调用的）——这种情况下就算不显式声明，read也读不到真人输入，
+#      与其卡死等一个永远不会来的回车，不如自动退到非交互模式，这也是很多成熟
+#      安装脚本（比如nvm、rustup的--yes）的通行做法。
+# 非交互模式下的核心原则：
+#   - 任何一个问答，如果调用install.sh之前已经通过环境变量（NN_XXX=... bash install.sh）
+#     把值传进来了，尊重这个值，不覆盖；
+#   - 没传的，退到该问题原本就有的默认值（跟交互模式下直接按回车走默认值的效果
+#     完全一致，只是不用人真的按回车）；
+#   - 每一步实际用了什么值，都打印到stderr（不是"静默魔法"，运行日志里能看到
+#     每个变量最终生效的值，方便排查是不是传参传错了）；密码/API Key类字段只
+#     打印"有没有拿到"，不打印内容本身。
+#   - 有效性校验失败又没法再问一遍人的情况（比如自定义命令路径不存在、docker
+#     容器名不存在），非交互模式下不阻塞死等，改成打印醒目警告后继续（跟founder
+#     一贯"宁可不阻断整个安装流程，让人自己看提示后续手动处理"的原则一致）——
+#     具体在install.sh里每个校验循环内部单独处理，这里的通用helper只负责
+#     "要不要真的调read"这一层。
+# 诚实说明：这一整套非交互模式的每个分支逻辑，本轮都用纯bash做过脱离真实服务器
+# 环境的行为验证（模拟各种环境变量组合、跑ask/ask_secret/ask_yn本身的判断逻辑），
+# 但没有在真实全新服务器上完整跑过一遍non-interactive的install.sh——这跟这个
+# 项目里其它"沙盒里验证过逻辑、真机效果待确认"的改动是同一个诚实标准，不是说
+# 逻辑本身没有被检查过。
+NN_NONINTERACTIVE="${NN_NONINTERACTIVE:-false}"
+if [ ! -t 0 ] && [ "$NN_NONINTERACTIVE" != "true" ]; then
+  NN_NONINTERACTIVE=true
+fi
+export NN_NONINTERACTIVE
+
+# ask <变量名> "<交互提示文字>" ["<非交互模式下的默认值>"]
+# 交互模式：跟原来的 `read -rp "$prompt" VAR` 完全一样。
+# 非交互模式：不调用read（不去猜stdin里到底有没有内容、猜错了行为诡异），
+# 变量原本已经有值（说明调用方通过环境变量传进来了）就保留，没有就用默认值，
+# 然后把最终值打印到stderr方便查日志。用bash的nameref（`local -n`，
+# bash 4.3+都支持，Ubuntu 20.04/Debian 11起自带的bash都够新）实现变量间接赋值，
+# 不用eval拼字符串（更不容易因为值里带特殊字符而拼出语法错误）。
+ask() {
+  local -n __ask_ref="$1"
+  local __ask_prompt="$2"
+  local __ask_default="${3-}"
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    if [ -z "${__ask_ref:-}" ]; then __ask_ref="$__ask_default"; fi
+    printf '[non-interactive] %s = %s\n' "$1" "${__ask_ref:-<空>}" >&2
+  else
+    read -rp "$__ask_prompt" __ask_ref
+  fi
+}
+
+# ask_secret：跟ask一样，但适用于密码/API Key这类不该出现在任何日志里的字段——
+# 非交互模式下只打印"有没有拿到值"，绝不打印值本身；交互模式下跟原来的
+# `read -rsp` 一样不回显输入。
+ask_secret() {
+  local -n __asks_ref="$1"
+  local __asks_prompt="$2"
+  local __asks_default="${3-}"
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    if [ -z "${__asks_ref:-}" ]; then __asks_ref="$__asks_default"; fi
+    if [ -n "${__asks_ref:-}" ]; then
+      printf '[non-interactive] %s = (已从环境变量读取，内容不打印)\n' "$1" >&2
+    else
+      printf '[non-interactive] %s = (未设置，留空)\n' "$1" >&2
+    fi
+  else
+    read -rsp "$__asks_prompt" __asks_ref
+    echo ""
+  fi
+}
+
+# ask_yn：跟ask一样，专门给Y/n这类确认型问题用，第三个参数是非交互模式下的
+# 默认答案（"Y"或"N"这种，跟原脚本里各处判断`[[ "$X" =~ ^[Yy]$ ]]`保持同一套写法）。
+ask_yn() {
+  local -n __asky_ref="$1"
+  local __asky_prompt="$2"
+  local __asky_default="${3:-N}"
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    if [ -z "${__asky_ref:-}" ]; then __asky_ref="$__asky_default"; fi
+    printf '[non-interactive] %s = %s\n' "$1" "${__asky_ref}" >&2
+  else
+    read -rp "$__asky_prompt" __asky_ref
+  fi
+}
+
 choose_language() {
+  # 非交互模式：不弹语言选择菜单（没有人看得到，弹了也没意义）。
+  # 直接尊重外部预先设置的NN_LANG（校验必须是五种支持语言之一，否则退回zh），
+  # 没设置就默认中文——理由：founder是中文母语，这个脚本的主要真实使用场景
+  # 目前还是中文用户，中文兜底比英文兜底更符合实际；如果调用方是别的语言的
+  # 用户/AI，本来就应该显式传NN_LANG，不依赖这个默认值。
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    case "${NN_LANG:-}" in
+      zh|en|ja|de|ru) : ;; # 已经是合法值，不动
+      *) NN_LANG=zh ;;
+    esac
+    export NN_LANG
+    printf '[non-interactive] NN_LANG = %s\n' "$NN_LANG" >&2
+    return 0
+  fi
   echo ""
   echo "Choose language / 选择语言 / 言語を選択 / Sprache wählen / Выберите язык"
   echo "  1) 中文"
