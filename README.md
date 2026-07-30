@@ -108,6 +108,8 @@ Copy `config/config.example.json` to `config/config.json`, then edit:
 | `smtp.*` | SMTP credentials for notification emails — see "Configuring Email" below |
 | `ai.*` | AI diagnosis settings (optional) — see "AI Failure Diagnosis" below |
 
+**Prefer not to `nano` a JSON file by hand, or setting this up on a headless/scripted server?** `install.sh` also supports a fully non-interactive mode driven by environment variables (`NN_NONINTERACTIVE=true` plus one `NN_*` variable per prompt — e.g. `NN_NODE_NAME`, `NN_CHECK_PORT`, `NN_RESTART_CMD`, `NN_PANEL_PASSWORD`, `NN_SMTP_*`, `NN_AI_*`). `NN_PANEL_PASSWORD` is the one mandatory variable in this mode — the script refuses to run without it, since an empty panel password would mean no protection at all. See the comments at the top of `install.sh` for the full variable list if you want to script a deployment.
+
 ## Accessing the Panel
 
 The panel process only listens on `127.0.0.1:8787` by default (unreachable from the outside world unless you change this — that's intentional, for safety).
@@ -198,11 +200,15 @@ It uses **your own** Anthropic or OpenAI API key, calling the official API direc
 | Field | What it means |
 |---|---|
 | `ai.enabled` | Whether it's on, default `false` |
-| `ai.provider` | `anthropic` or `openai` |
+| `ai.provider` | `anthropic`, `openai`, or `openai-compatible` |
 | `ai.apiKey` | Your own API key. Leave blank if unconfigured (**don't** paste in placeholder/explanatory text — that would get sent to the real API as if it were a key, producing a confusing error) |
-| `ai.model` | Specific model name; leave `""` to use the default (`claude-sonnet-4-6` for Anthropic, `gpt-4o-mini` for OpenAI) |
+| `ai.model` | Specific model name; leave `""` to use the default (`claude-sonnet-4-6` for Anthropic, `gpt-4o-mini` for OpenAI). **Required** (no default) when `ai.provider` is `openai-compatible` |
+| `ai.baseUrl` | Only used when `ai.provider` is `openai-compatible`. A bare hostname, no `http(s)://` prefix (e.g. `open.bigmodel.cn`) |
+| `ai.apiPath` | Only used when `ai.provider` is `openai-compatible`. Defaults to `/v1/chat/completions` if left blank |
 | `ai.triggerAfterFailures` | How many consecutive failures before it auto-triggers a diagnosis, default `3` |
 | `ai.language` | Language for the diagnosis text and error messages: `zh`/`en`/`ja`/`de`/`ru`. Defaults to whatever you picked during install — this is separate from the panel's own display-language switch (that one lives in your browser; the server doesn't know about it), change this field directly if you want a different one |
+
+**What's `openai-compatible` for?** Plenty of third-party or free-tier providers (e.g. Zhipu/GLM, DeepSeek, Qwen/通义, Moonshot/Kimi, and others) speak an OpenAI-compatible chat-completions API without being OpenAI itself. Pick this provider and fill in `baseUrl`/`apiPath` to use one of them — verified working end-to-end against Zhipu's free-tier GLM. One difference from the two official providers: content sent to an `openai-compatible` endpoint is sanitized first (see the redaction step in `core/ai-provider.js`), since these are typically third-party or free services; the official Anthropic/OpenAI paths are not sanitized. If you're on a thinking/reasoning model through this path and diagnoses keep coming back empty, make sure `ai.model` is set to a real model name your provider hosts — reasoning models can burn their whole token budget on internal thinking before writing a final answer if the request's token budget (not user-configurable) is set too low for that model.
 
 After editing, restart the monitor process: `pm2 restart nodenanny-monitor`.
 

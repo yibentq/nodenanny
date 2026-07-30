@@ -108,6 +108,8 @@ sudo bash install.sh
 | `smtp.*` | 发送通知邮件用的 SMTP 账号信息，见下方「配置 SMTP」 |
 | `ai.*` | AI 故障诊断相关配置（可选），见下方「AI 故障诊断」 |
 
+**不想手动 `nano` 改 JSON，或者想在无人值守/脚本化的服务器上批量部署？** `install.sh` 也支持完全非交互模式，靠环境变量驱动（`NN_NONINTERACTIVE=true`，再加上每个问题对应的一个 `NN_*` 变量，比如 `NN_NODE_NAME`、`NN_CHECK_PORT`、`NN_RESTART_CMD`、`NN_PANEL_PASSWORD`、`NN_SMTP_*`、`NN_AI_*`）。这个模式下唯一强制要求的变量是 `NN_PANEL_PASSWORD`——脚本会直接拒绝在没有它的情况下运行,因为面板密码留空等于对公网完全不设防。完整变量列表见 `install.sh` 开头的注释。
+
 ## 面板访问
 
 面板进程只监听 `127.0.0.1:8787`（不改配置的话，外部网络直接连不上，这是故意的，更安全）。
@@ -198,11 +200,15 @@ sudo bash install.sh
 | 字段 | 说明 |
 |---|---|
 | `ai.enabled` | 是否开启，默认 `false` |
-| `ai.provider` | `anthropic` 或 `openai` |
+| `ai.provider` | `anthropic`、`openai`，或 `openai-compatible` |
 | `ai.apiKey` | 你自己的 API Key，留空表示未配置（**不要**填成一句说明文字，那样会被当成真实 Key 发给官方 API，得到一个看不懂的报错） |
-| `ai.model` | 具体模型名，留空 `""` 用默认模型（anthropic 默认 `claude-sonnet-4-6`，openai 默认 `gpt-4o-mini`） |
+| `ai.model` | 具体模型名，留空 `""` 用默认模型（anthropic 默认 `claude-sonnet-4-6`，openai 默认 `gpt-4o-mini`）。选 `openai-compatible` 时**必填**，没有默认值 |
+| `ai.baseUrl` | 只在 `ai.provider` 为 `openai-compatible` 时使用。填一个不带 `http(s)://` 前缀的裸域名（例如 `open.bigmodel.cn`） |
+| `ai.apiPath` | 只在 `ai.provider` 为 `openai-compatible` 时使用。留空默认 `/v1/chat/completions` |
 | `ai.triggerAfterFailures` | 连续失败几次后自动触发一次诊断，默认 `3` |
 | `ai.language` | 诊断内容和报错文本用哪种语言生成：`zh`/`en`/`ja`/`de`/`ru`。默认跟随安装时选择的语言，跟面板网页上切换的显示语言是两回事（面板语言是浏览器本地记住的，服务器并不知道），想改就直接改这个字段 |
+
+**`openai-compatible` 是干什么用的？** 不少第三方或者免费接口（比如智谱 GLM、DeepSeek、通义、Kimi 等）自己不是 OpenAI，但接口协议兼容 OpenAI 的 chat-completions 格式。选这个 provider，填好 `baseUrl`/`apiPath` 就能用——已经用智谱免费版 GLM 做过真实端到端验证，确认可用。跟另外两个官方 provider 的一点区别：发给 `openai-compatible` 接口的内容会先做脱敏处理（见 `core/ai-provider.js` 里的脱敏逻辑），因为这类接口通常是第三方或免费服务；官方 Anthropic/OpenAI 两条路径不做这一步。如果你接的是一个"会思考"的推理模型，诊断老是返回空结果，先确认 `ai.model` 填的是你这个接口真实提供的模型名——推理模型如果请求的 token 预算（这个不是用户可配置的）对它来说太小，可能把预算全耗在内部思考上，导致最终答案是空的。
 
 改完保存后重启监控进程：`pm2 restart nodenanny-monitor`。
 
