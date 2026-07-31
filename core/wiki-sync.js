@@ -148,10 +148,19 @@ function httpsGetJson(url, timeoutMs = 15000) {
           reject(new Error(`HTTP ${res.statusCode}（GitHub API，可能是仓库/分支不存在或触发了未认证限流）`));
           return;
         }
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
+        // 真实bug修复(本轮复查发现，很可能就是wiki面板"??"乱码问题的根因):
+        // 此前是 let data=''; data += chunk 逐块拼接——chunk是Buffer，+=会把每一块
+        // 单独toString('utf-8')再拼接成字符串。网络传输经常把内容切成多个TCP包，
+        // 如果一个多字节字符(比如中文，UTF-8下占3字节)刚好被切在两个chunk中间，
+        // 对不完整的字节单独decode会产生U+FFFD替换字符，且这个损坏在这一步就已经
+        // 写入了字符串——后面全部下游处理拿到的都是坏数据，跟"面板字体渲染问题"
+        // 无关。改法：先收集原始Buffer，收完再一次性Buffer.concat().toString('utf-8')，
+        // 这样多字节字符不管被切在哪个chunk边界都能正确拼回完整字节再解码。
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
         res.on('end', () => {
           try {
+            const data = Buffer.concat(chunks).toString('utf-8');
             resolve(JSON.parse(data));
           } catch (err) {
             reject(new Error(`GitHub API 返回内容不是合法JSON：${err.message}`));
@@ -181,9 +190,11 @@ function httpsGetText(url, timeoutMs = 15000) {
           reject(new Error(`HTTP ${res.statusCode}`));
           return;
         }
-        let data = '';
-        res.on('data', (chunk) => (data += chunk));
-        res.on('end', () => resolve(data));
+        // 同上httpsGetJson的修复理由：这个函数下载的正是wiki正文markdown（长中文
+        // 文章、多字节字符多，被TCP分包切中的概率更高），是"??"乱码最直接的嫌疑对象。
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
       }
     );
     req.on('timeout', () => {
