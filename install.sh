@@ -58,6 +58,20 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
+# 修复(本轮founder真机复现的"选IP还是域名之后卡住"bug，根因排查后发现)：
+# Ubuntu 22.04/24.04 默认装了 needrestart，凡是 apt 装/升级涉及后台服务的包
+# （下面会装 nginx、certbot、git、nodejs 等），都会弹一个交互式"要不要重启这些
+# 服务"的确认框——这个框不会像普通文字一样滚动打印，看起来就跟脚本卡死了一样，
+# 得手动按回车/空格才能过去，装几个包可能连续弹好几次，跟真机复现的"卡住→回车→
+# 又卡住→回车→跑完"完全对得上。这里在最开头统一关掉：
+#   DEBIAN_FRONTEND=noninteractive 让 apt/dpkg 本身不弹交互式问题（比如
+#     "配置文件被本地修改过，用哪个版本"这类），
+#   NEEDRESTART_MODE=a 让 needrestart 自动重启相关服务、不弹确认框。
+# 用 export 导出，这样下面所有 apt-get 调用（包括 setup-reverse-proxy.sh、
+# 流量池安装那段用 bash 调起的子脚本）都会继承到，不需要每处单独加。
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+
 # ---------- 1. 检测系统 ----------
 if [ -f /etc/os-release ]; then
   . /etc/os-release
@@ -288,7 +302,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
   if [ -n "$NN_PROXY_SKIPPED" ] && [ -z "$NN_DETECTED_PORT" ]; then
     echo ""
     m proxy_skip_no_service_found
-    ask_yn NN_SKIP_CONFIRM "$(m proxy_skip_confirm_prompt)" "N"
+    ask_yn_risky NN_SKIP_CONFIRM "$(m proxy_skip_confirm_prompt)" "N"
     if [[ ! "$NN_SKIP_CONFIRM" =~ ^[Yy]$ ]]; then
       m proxy_skip_abort
       if [ "$NN_NONINTERACTIVE" = "true" ]; then
@@ -346,7 +360,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
         if ! docker inspect "$NN_SERVICE_NAME" >/dev/null 2>&1; then
           docker ps -a --format '  - {{.Names}}' 2>/dev/null
           m mgmt_docker_not_found "$NN_SERVICE_NAME"
-          ask_yn NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
+          ask_yn_risky NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
           if [[ ! "$NN_MGMT_CONFIRM" =~ ^[Yy]$ ]]; then
             ask NN_SERVICE_NAME "$(m docker_name_prompt)" "xray"
             export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
@@ -375,7 +389,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
         NN_CMD_FIRST_TOKEN="${NN_RESTART_CMD%% *}"
         if [[ "$NN_CMD_FIRST_TOKEN" == /* ]] && [ ! -e "$NN_CMD_FIRST_TOKEN" ]; then
           m custom_cmd_path_not_found "$NN_CMD_FIRST_TOKEN"
-          ask_yn NN_CMD_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
+          ask_yn_risky NN_CMD_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
           if [[ "$NN_CMD_CONFIRM" =~ ^[Yy]$ ]]; then
             break
           fi
@@ -405,7 +419,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
       # 不会造成死循环。)
       if ! systemctl cat "$NN_SERVICE_NAME" >/dev/null 2>&1; then
         m mgmt_systemd_not_found "$NN_SERVICE_NAME"
-        ask_yn NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
+        ask_yn_risky NN_MGMT_CONFIRM "$(m custom_cmd_confirm_anyway)" "Y"
         if [[ ! "$NN_MGMT_CONFIRM" =~ ^[Yy]$ ]]; then
           ask NN_SERVICE_NAME "$(m systemd_name_prompt)" "xray"
           export NN_SERVICE_NAME="${NN_SERVICE_NAME:-xray}"
@@ -477,7 +491,7 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
          ask NN_SMTP_HOST "$(m smtp_host_prompt)" ""
          if [[ "$NN_SMTP_HOST" == *"@"* ]]; then
            m smtp_host_looks_like_email "$NN_SMTP_HOST"
-           ask_yn NN_SMTP_HOST_CONFIRM "$(m smtp_host_confirm_anyway)" "Y"
+           ask_yn_risky NN_SMTP_HOST_CONFIRM "$(m smtp_host_confirm_anyway)" "Y"
            if [[ "$NN_SMTP_HOST_CONFIRM" =~ ^[Yy]$ ]]; then
              break
            fi
@@ -694,13 +708,16 @@ else
   fi
 fi
 
-# ---------- 5d. 手动种子来源（可选，跟5c的GitHub自动发现彼此独立）----------
+# ---------- 5d. 手动种子来源（跟5c的GitHub自动发现彼此独立）----------
 # 本轮修复的真实缺口(交接文档反复记录过、此前一直没接线):config.example.json里
 # 样例默认值其实已经带了几条创始人自己验证过的社区订阅(旺财等),但write-config.js
 # 从来没写过manualSources这个字段,install.sh也从来没问过用户要不要用——导致
 # 只有"手动改已经部署好的服务器config.json"这一条路能用上,新装的服务器永远
 # 拿不到这几条来源。这里补上一个独立的问答步骤,跟5c一样用config.json里的真实值
 # (而不是文件是否存在)当完成标记,支持断线重跑续接。
+# 默认值说明(founder本轮明确要求改成默认开启,区别于5c的discovery默认关闭):
+# 这些是创始人自己手动验证过、值得信任的种子来源(不是完全无人工把关的自动发现),
+# 默认答"是"能让新装的服务器一开始就有一批可用的备用节点，不用额外多问一遍。
 MANUAL_SOURCES_ALREADY_SET="$(node -e "
   try {
     const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
@@ -715,7 +732,7 @@ else
   echo ""
   m manual_source_title
   m manual_source_explain
-  ask_yn NN_MANUAL_SOURCE_CHOICE "$(m manual_source_ask)" "N"
+  ask_yn NN_MANUAL_SOURCE_CHOICE "$(m manual_source_ask)" "Y"
   if [[ "$NN_MANUAL_SOURCE_CHOICE" =~ ^[Yy]$ ]]; then
     NN_POOL_MANUAL_SOURCES_ENABLED=true node -e "
       const fs=require('fs');
@@ -734,6 +751,96 @@ else
     m manual_source_enabled_note
   else
     m manual_source_skip_note
+  fi
+fi
+
+# ---------- 5e. 在线终端（本轮新增，修复真实缺口：config.terminal.password这个字段
+# 一直存在、代码里也写死了"留空且enabled=true会拒绝挂载"，但install.sh从头到尾
+# 从来没问过这个密码，config.example.json默认也是空——导致这个功能永远没法在
+# 装机时直接可用，只能装完手动改config.json。这里补一个独立问答，密码为空时
+# 绝不写enabled:true，避免开一个没有密码保护的终端出去。默认关闭（涉及安全，
+# 让用户自己决定要不要开，不像5d那样默认信任）。----------
+TERMINAL_ALREADY_SET="$(node -e "
+  try {
+    const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
+    console.log((c.terminal && c.terminal.enabled) ? 'true' : 'false');
+  } catch (e) {
+    console.log('false');
+  }
+")"
+if [ "$TERMINAL_ALREADY_SET" = "true" ]; then
+  m terminal_already_enabled
+else
+  echo ""
+  m terminal_title
+  m terminal_explain
+  ask_yn NN_TERMINAL_CHOICE "$(m terminal_ask)" "N"
+  if [[ "$NN_TERMINAL_CHOICE" =~ ^[Yy]$ ]]; then
+    ask_secret NN_TERMINAL_PASSWORD "$(m terminal_password_prompt)" ""
+    if [ -n "${NN_TERMINAL_PASSWORD:-}" ]; then
+      # 密码内容不可控，用环境变量传给node -e，不在shell里拼进JS字符串
+      # （原因跟write-config.js顶部注释一致：内容带引号/反斜杠会拼坏JSON）。
+      NN_TERMINAL_PASSWORD="$NN_TERMINAL_PASSWORD" node -e "
+        const fs=require('fs');
+        const p='$INSTALL_DIR/config/config.json';
+        const c=JSON.parse(fs.readFileSync(p,'utf-8'));
+        c.terminal=c.terminal||{};
+        c.terminal.enabled=true;
+        c.terminal.password=process.env.NN_TERMINAL_PASSWORD;
+        fs.writeFileSync(p, JSON.stringify(c,null,2));
+      "
+      m terminal_enabled_note
+    else
+      m terminal_password_missing_warn
+    fi
+  else
+    m terminal_skip_note
+  fi
+fi
+
+# ---------- 5f. 内容同步来源（本轮新增，修复真实缺口：kbSync/wikiSync这两个
+# 同步功能面板和代码都已经做好了，但write-config.js从来没写过这两个字段，
+# install.sh也从来没问过——config.example.json里默认是空，导致这两个已经做好的
+# 功能新装的服务器永远用不上。这两个字段指向的是NodeNanny官方仓库本身的公开内容
+# （data/knowledge-base.json、data/wiki/），不涉及任何密钥，所以不用像终端密码
+# 那样单独问用户填owner/repo——默认直接指向官方仓库，只问一句"要不要用"即可，
+# fork了自己维护内容的人选"否"，以后自己去config.json改成自己的仓库。----------
+KBSYNC_SET="$(node -e "
+  try {
+    const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
+    console.log((c.kbSync && c.kbSync.rawUrl) ? 'true' : 'false');
+  } catch (e) { console.log('false'); }
+")"
+WIKISYNC_SET="$(node -e "
+  try {
+    const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
+    console.log((c.wikiSync && c.wikiSync.owner && c.wikiSync.repo) ? 'true' : 'false');
+  } catch (e) { console.log('false'); }
+")"
+if [ "$KBSYNC_SET" = "true" ] && [ "$WIKISYNC_SET" = "true" ]; then
+  m sync_already_enabled
+else
+  echo ""
+  m sync_title
+  m sync_explain
+  ask_yn NN_SYNC_CHOICE "$(m sync_ask)" "Y"
+  if [[ "$NN_SYNC_CHOICE" =~ ^[Yy]$ ]]; then
+    node -e "
+      const fs=require('fs');
+      const p='$INSTALL_DIR/config/config.json';
+      const c=JSON.parse(fs.readFileSync(p,'utf-8'));
+      c.kbSync=c.kbSync||{};
+      c.kbSync.rawUrl='https://raw.githubusercontent.com/yibentq/nodenanny/main/data/knowledge-base.json';
+      c.wikiSync=c.wikiSync||{};
+      c.wikiSync.owner='yibentq';
+      c.wikiSync.repo='nodenanny';
+      c.wikiSync.ref=c.wikiSync.ref||'main';
+      c.wikiSync.path=c.wikiSync.path||'data/wiki';
+      fs.writeFileSync(p, JSON.stringify(c,null,2));
+    "
+    m sync_enabled_note
+  else
+    m sync_skip_note
   fi
 fi
 

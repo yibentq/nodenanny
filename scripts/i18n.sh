@@ -51,6 +51,24 @@ if [ ! -t 0 ] && [ "$NN_NONINTERACTIVE" != "true" ]; then
 fi
 export NN_NONINTERACTIVE
 
+# ---------- 问答提示颜色（本轮founder要求新增）----------
+# 只在真正的终端上启用（[ -t 1 ]），避免输出被重定向到日志文件时，文件里混进
+# 一堆看不懂的 ANSI 转义码。分两级：
+#   黄色：密码/API Key/Token 这类需要妥善保管的输入提示（ask_secret 自动套用）；
+#   红色：风险确认类问题——检测到的东西看起来不太对，但要不要仍然继续
+#     （比如没检测到代理服务、自定义命令路径不存在、SMTP host看起来像邮箱），
+#     单独用 ask_yn_risky 调用，跟普通"要不要开启某功能"的问题区分开。
+# 非交互模式下不会真的 read，不需要颜色，两个 helper 内部只在交互分支里用色。
+if [ -t 1 ]; then
+  C_RESET=$'\033[0m'
+  C_YELLOW=$'\033[1;33m'
+  C_RED=$'\033[1;31m'
+else
+  C_RESET=''
+  C_YELLOW=''
+  C_RED=''
+fi
+
 # ask <变量名> "<交互提示文字>" ["<非交互模式下的默认值>"]
 # 交互模式：跟原来的 `read -rp "$prompt" VAR` 完全一样。
 # 非交互模式：不调用read（不去猜stdin里到底有没有内容、猜错了行为诡异），
@@ -85,7 +103,7 @@ ask_secret() {
       printf '[non-interactive] %s = (未设置，留空)\n' "$1" >&2
     fi
   else
-    read -rsp "$__asks_prompt" __asks_ref
+    read -rsp "${C_YELLOW}${__asks_prompt}${C_RESET}" __asks_ref
     echo ""
   fi
 }
@@ -101,6 +119,22 @@ ask_yn() {
     printf '[non-interactive] %s = %s\n' "$1" "${__asky_ref}" >&2
   else
     read -rp "$__asky_prompt" __asky_ref
+  fi
+}
+
+# ask_yn_risky：跟ask_yn完全一样，只是交互模式下提示文字会用红色高亮——专门给
+# "检测到的东西看起来不太对，但还是要不要继续"这类风险确认用（比如没检测到代理
+# 服务、自定义命令路径不存在、SMTP host看起来像邮箱地址），跟普通的"要不要开启
+# 某个功能"问题区分开，方便用户一眼看出这里要多想一下再回答，不要习惯性回车。
+ask_yn_risky() {
+  local -n __askyr_ref="$1"
+  local __askyr_prompt="$2"
+  local __askyr_default="${3:-N}"
+  if [ "$NN_NONINTERACTIVE" = "true" ]; then
+    if [ -z "${__askyr_ref:-}" ]; then __askyr_ref="$__askyr_default"; fi
+    printf '[non-interactive] %s = %s\n' "$1" "${__askyr_ref}" >&2
+  else
+    read -rp "${C_RED}${__askyr_prompt}${C_RESET}" __askyr_ref
   fi
 }
 
@@ -904,6 +938,92 @@ MSG[en:manual_source_skip_note]="Skipped — the pool won't use these manual see
 MSG[ja:manual_source_skip_note]="スキップしました。予備ノードプールはこれらの手動シードソースを使用しません。他の機能には影響ありません。"
 MSG[de:manual_source_skip_note]="Übersprungen — der Pool nutzt diese manuellen Seed-Quellen nicht; andere Funktionen sind nicht betroffen."
 MSG[ru:manual_source_skip_note]="Пропущено — пул не будет использовать эти ручные исходные источники; на остальные функции это не влияет."
+
+# ---------- 5e. 在线终端（本轮新增，修复"部署过程从未问过终端密码"的缺口）----------
+MSG[zh:terminal_title]="在线终端（可选功能，涉及安全，请谨慎开启）"
+MSG[en:terminal_title]="Online Terminal (optional, security-sensitive — enable with care)"
+MSG[ja:terminal_title]="オンラインターミナル（任意機能、セキュリティに関わるため慎重に有効化してください）"
+MSG[de:terminal_title]="Online-Terminal (optional, sicherheitsrelevant — mit Bedacht aktivieren)"
+MSG[ru:terminal_title]="Онлайн-терминал (опционально, связано с безопасностью — включайте осторожно)"
+
+MSG[zh:terminal_explain]="面板里有一个网页版终端，能让你不用 SSH 客户端、直接在浏览器里对服务器敲命令。开启后除了面板登录密码，打开终端前还要单独输入一次这里设置的密码，作为多一层保护。如果你不确定要不要用，选「否」就好，以后随时可以手动改配置文件再开启。"
+MSG[en:terminal_explain]="The panel includes a browser-based terminal so you can run commands on the server without an SSH client. If enabled, opening it requires a separate password (on top of your panel login) as an extra layer of protection. If you're not sure, choose \"No\" — you can always turn it on later by editing the config file."
+MSG[ja:terminal_explain]="パネルにはブラウザから直接サーバーにコマンドを打てるWeb版ターミナルがあります。有効にすると、パネルのログインパスワードとは別に、ターミナルを開く前にここで設定するパスワードをもう一度入力する必要があり、追加の保護層になります。迷う場合は「いいえ」を選んでください。後からいつでも設定ファイルを編集して有効化できます。"
+MSG[de:terminal_explain]="Das Panel enthält ein browserbasiertes Terminal, mit dem du Befehle auf dem Server ausführen kannst, ohne einen SSH-Client zu benötigen. Wenn aktiviert, muss vor dem Öffnen zusätzlich zum Panel-Login-Passwort ein hier festgelegtes Passwort eingegeben werden — eine zusätzliche Schutzschicht. Bei Unsicherheit wähle \"Nein\" — du kannst es später jederzeit durch Bearbeiten der Konfigurationsdatei aktivieren."
+MSG[ru:terminal_explain]="В панели есть веб-терминал, позволяющий выполнять команды на сервере прямо из браузера, без SSH-клиента. При включении перед открытием терминала потребуется отдельно ввести пароль, заданный здесь (в дополнение к паролю входа в панель) — как дополнительный уровень защиты. Если не уверены, выберите «Нет» — включить можно в любой момент позже, отредактировав файл конфигурации."
+
+MSG[zh:terminal_ask]="要不要现在开启在线终端功能？[y/N]: "
+MSG[en:terminal_ask]="Enable the online terminal now? [y/N]: "
+MSG[ja:terminal_ask]="今すぐオンラインターミナルを有効にしますか？ [y/N]: "
+MSG[de:terminal_ask]="Online-Terminal jetzt aktivieren? [y/N]: "
+MSG[ru:terminal_ask]="Включить онлайн-терминал сейчас? [y/N]: "
+
+MSG[zh:terminal_password_prompt]="请设置终端解锁密码（跟面板登录密码可以设成一样，方便记；输入时不会显示）: "
+MSG[en:terminal_password_prompt]="Set an unlock password for the terminal (can be the same as your panel password, for convenience; input is hidden): "
+MSG[ja:terminal_password_prompt]="ターミナルのロック解除パスワードを設定してください（パネルのログインパスワードと同じでも構いません。入力内容は表示されません）: "
+MSG[de:terminal_password_prompt]="Lege ein Entsperrpasswort für das Terminal fest (kann zur Vereinfachung mit dem Panel-Passwort identisch sein; die Eingabe wird nicht angezeigt): "
+MSG[ru:terminal_password_prompt]="Задайте пароль разблокировки терминала (можно такой же, как пароль панели, для удобства; ввод не отображается): "
+
+MSG[zh:terminal_already_enabled]="在线终端已经开启过了，跳过这一步。"
+MSG[en:terminal_already_enabled]="The online terminal is already enabled — skipping this step."
+MSG[ja:terminal_already_enabled]="オンラインターミナルはすでに有効になっています。このステップをスキップします。"
+MSG[de:terminal_already_enabled]="Das Online-Terminal ist bereits aktiviert — dieser Schritt wird übersprungen."
+MSG[ru:terminal_already_enabled]="Онлайн-терминал уже включён — этот шаг пропускается."
+
+MSG[zh:terminal_enabled_note]="已开启在线终端，密码已写入配置。"
+MSG[en:terminal_enabled_note]="Online terminal enabled; the password has been written to the config."
+MSG[ja:terminal_enabled_note]="オンラインターミナルを有効にしました。パスワードは設定に書き込まれました。"
+MSG[de:terminal_enabled_note]="Online-Terminal aktiviert; das Passwort wurde in die Konfiguration geschrieben."
+MSG[ru:terminal_enabled_note]="Онлайн-терминал включён; пароль записан в конфигурацию."
+
+MSG[zh:terminal_password_missing_warn]="没有拿到有效的密码，为安全起见，这次先不开启在线终端（避免一个没有密码保护的终端暴露出去）。以后想用的话，手动在 config/config.json 的 terminal 字段里填上 enabled: true 和一个密码，再重启 nodenanny-panel 进程即可。"
+MSG[en:terminal_password_missing_warn]="No valid password was provided, so the online terminal will NOT be enabled this time (to avoid exposing an unprotected terminal). To enable it later, manually set \"enabled\": true and a password under the \"terminal\" section of config/config.json, then restart the nodenanny-panel process."
+MSG[ja:terminal_password_missing_warn]="有効なパスワードを取得できなかったため、安全のため今回はオンラインターミナルを有効にしません（パスワード保護のないターミナルが公開されるのを防ぐため）。後で使いたい場合は、config/config.json の terminal 項目で enabled を true にしてパスワードを設定し、nodenanny-panel プロセスを再起動してください。"
+MSG[de:terminal_password_missing_warn]="Es wurde kein gültiges Passwort angegeben, daher wird das Online-Terminal dieses Mal NICHT aktiviert (um ein ungeschütztes offenes Terminal zu vermeiden). Um es später zu aktivieren, setze manuell \"enabled\": true und ein Passwort im Abschnitt \"terminal\" von config/config.json und starte den Prozess nodenanny-panel neu."
+MSG[ru:terminal_password_missing_warn]="Не удалось получить корректный пароль, поэтому на этот раз онлайн-терминал НЕ будет включён (чтобы избежать незащищённого открытого терминала). Чтобы включить его позже, вручную установите \"enabled\": true и пароль в разделе \"terminal\" файла config/config.json, затем перезапустите процесс nodenanny-panel."
+
+MSG[zh:terminal_skip_note]="好的，跳过在线终端功能。以后想用的话，重跑这一步，或者手动改 config/config.json 里的 terminal 字段再重启 nodenanny-panel。"
+MSG[en:terminal_skip_note]="Okay, skipping the online terminal. You can enable it later by re-running this step, or by editing the \"terminal\" section of config/config.json and restarting nodenanny-panel."
+MSG[ja:terminal_skip_note]="了解しました。オンラインターミナルはスキップします。後で使いたい場合は、このステップを再実行するか、config/config.json の terminal 項目を編集して nodenanny-panel を再起動してください。"
+MSG[de:terminal_skip_note]="Okay, Online-Terminal wird übersprungen. Du kannst es später aktivieren, indem du diesen Schritt erneut ausführst oder den Abschnitt \"terminal\" in config/config.json bearbeitest und nodenanny-panel neu startest."
+MSG[ru:terminal_skip_note]="Хорошо, онлайн-терминал пропускается. Чтобы включить его позже, повторно запустите этот шаг или отредактируйте раздел \"terminal\" в config/config.json и перезапустите nodenanny-panel."
+
+# ---------- 5f. 内容同步来源（本轮新增，修复"kbSync/wikiSync已经做好但没写入配置"的缺口）----------
+MSG[zh:sync_title]="内容同步来源（Wiki 百科 + 知识库，默认对接官方仓库）"
+MSG[en:sync_title]="Content sync sources (Wiki + knowledge base, defaults to the official repo)"
+MSG[ja:sync_title]="コンテンツ同期元（Wiki百科事典＋ナレッジベース、デフォルトで公式リポジトリを参照）"
+MSG[de:sync_title]="Inhalts-Synchronisationsquellen (Wiki + Wissensdatenbank, standardmäßig das offizielle Repo)"
+MSG[ru:sync_title]="Источники синхронизации контента (Wiki + база знаний, по умолчанию — официальный репозиторий)"
+
+MSG[zh:sync_explain]="面板里的 Wiki 百科和故障知识库支持一键从 GitHub 拉取更新，默认指向 NodeNanny 官方仓库，跟你自己的部署没有冲突，也不涉及任何密钥。如果你是 fork 出来自己维护内容的，可以选「否」，以后自己去 config.json 里改成你自己的仓库地址。"
+MSG[en:sync_explain]="The panel's Wiki and troubleshooting knowledge base can pull updates from GitHub with one click. By default this points at the official NodeNanny repo, doesn't conflict with your own deployment, and involves no secrets. If you forked the project and maintain your own content, choose \"No\" and point it at your own repo later in config.json."
+MSG[ja:sync_explain]="パネルのWiki百科事典とトラブルシューティング・ナレッジベースは、ワンクリックでGitHubから更新を取得できます。デフォルトではNodeNanny公式リポジトリを参照し、あなた自身のデプロイと競合せず、シークレットも一切関係しません。プロジェクトをフォークして独自にコンテンツを管理している場合は「いいえ」を選び、後でconfig.jsonに自分のリポジトリを設定してください。"
+MSG[de:sync_explain]="Das Wiki und die Troubleshooting-Wissensdatenbank im Panel können mit einem Klick Updates von GitHub abrufen. Standardmäßig verweist das auf das offizielle NodeNanny-Repo, kollidiert nicht mit deiner eigenen Installation und erfordert keine Geheimnisse. Falls du das Projekt geforkt hast und eigene Inhalte pflegst, wähle \"Nein\" und trage später dein eigenes Repo in config.json ein."
+MSG[ru:sync_explain]="Wiki и база знаний по устранению неполадок в панели могут получать обновления с GitHub в один клик. По умолчанию это указывает на официальный репозиторий NodeNanny, не конфликтует с вашим собственным развёртыванием и не требует никаких секретов. Если вы сделали форк проекта и ведёте собственный контент, выберите «Нет» и позже укажите свой репозиторий в config.json."
+
+MSG[zh:sync_ask]="要不要现在启用内容同步，指向官方仓库？[Y/n]: "
+MSG[en:sync_ask]="Enable content sync now, pointing at the official repo? [Y/n]: "
+MSG[ja:sync_ask]="今すぐ公式リポジトリを参照するコンテンツ同期を有効にしますか？ [Y/n]: "
+MSG[de:sync_ask]="Inhalts-Synchronisation jetzt aktivieren, verweisend auf das offizielle Repo? [Y/n]: "
+MSG[ru:sync_ask]="Включить синхронизацию контента сейчас, указав на официальный репозиторий? [Y/n]: "
+
+MSG[zh:sync_already_enabled]="内容同步来源已经配置过了，跳过这一步。"
+MSG[en:sync_already_enabled]="Content sync sources are already configured — skipping this step."
+MSG[ja:sync_already_enabled]="コンテンツ同期元はすでに設定済みです。このステップをスキップします。"
+MSG[de:sync_already_enabled]="Inhalts-Synchronisationsquellen sind bereits konfiguriert — dieser Schritt wird übersprungen."
+MSG[ru:sync_already_enabled]="Источники синхронизации контента уже настроены — этот шаг пропускается."
+
+MSG[zh:sync_enabled_note]="已启用内容同步，默认指向官方仓库，你可以随时在面板里点「检查更新」查看差异后再决定要不要合并。"
+MSG[en:sync_enabled_note]="Content sync enabled, pointing at the official repo. You can always click \"Check for updates\" in the panel to review the diff before merging."
+MSG[ja:sync_enabled_note]="コンテンツ同期を有効にし、公式リポジトリを参照するよう設定しました。パネルの「更新を確認」からいつでも差分を確認してからマージできます。"
+MSG[de:sync_enabled_note]="Inhalts-Synchronisation aktiviert, verweist auf das offizielle Repo. Du kannst jederzeit im Panel auf \"Auf Updates prüfen\" klicken, um den Diff vor dem Zusammenführen zu prüfen."
+MSG[ru:sync_enabled_note]="Синхронизация контента включена и указывает на официальный репозиторий. В любое время можно нажать «Проверить обновления» в панели, чтобы посмотреть diff перед слиянием."
+
+MSG[zh:sync_skip_note]="好的，跳过内容同步。以后想用的话，去 config/config.json 里手动填 kbSync.rawUrl 和 wikiSync.owner/repo 即可。"
+MSG[en:sync_skip_note]="Okay, skipping content sync. To enable it later, manually set kbSync.rawUrl and wikiSync.owner/repo in config/config.json."
+MSG[ja:sync_skip_note]="了解しました。コンテンツ同期はスキップします。後で使いたい場合は、config/config.json に kbSync.rawUrl と wikiSync.owner/repo を手動で設定してください。"
+MSG[de:sync_skip_note]="Okay, Inhalts-Synchronisation wird übersprungen. Um sie später zu aktivieren, setze manuell kbSync.rawUrl und wikiSync.owner/repo in config/config.json."
+MSG[ru:sync_skip_note]="Хорошо, синхронизация контента пропускается. Чтобы включить её позже, вручную задайте kbSync.rawUrl и wikiSync.owner/repo в config/config.json."
 
 MSG[zh:starting]="-- 启动 NodeNanny --"
 MSG[en:starting]="-- Starting NodeNanny --"

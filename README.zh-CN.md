@@ -88,7 +88,13 @@ cd nodenanny
 sudo bash install.sh
 ```
 
-脚本会依次：安装 Node.js / PM2、引导你完成交互式配置问答（节点信息、SMTP 邮箱、AI 诊断、流量池均可在此一步配好，也可跳过留待以后在 `config.json` 里手动填）、用 PM2 启动三个守护进程、最后帮你配好面板访问方式（可选域名/IP/SSH 隧道）。**全程只需运行一次。**
+> **全新服务器、连 git 都还没装？** 可以用这一行代替上面三行，会自动检查/安装 git、clone 仓库、再交给 `install.sh` 继续：
+> ```bash
+> sudo bash <(curl -fsSL https://raw.githubusercontent.com/yibentq/nodenanny/main/bootstrap.sh)
+> ```
+> 注意一定要用 `bash <(curl ...)` 这种写法，不要写成 `curl ... | bash` ——用管道会导致后面 install.sh 的问答读不到你的键盘输入。
+
+脚本会依次：安装 Node.js / PM2、引导你完成交互式配置问答（节点信息、SMTP 邮箱、AI 诊断、流量池、在线终端、内容同步均可在此一步配好，也可跳过留待以后在 `config.json` 里手动填）、用 PM2 启动三个守护进程、最后帮你配好面板访问方式（可选域名/IP/SSH 隧道）。**全程只需运行一次。**
 
 支持系统：Ubuntu 20.04 / 22.04 / 24.04，Debian 11 / 12。
 

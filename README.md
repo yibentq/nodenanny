@@ -88,7 +88,13 @@ cd nodenanny
 sudo bash install.sh
 ```
 
-The script will, in order: install Node.js / PM2, walk you through an interactive setup (node info, SMTP email, AI diagnosis, and the backup node pool can all be configured right here, or skipped and filled in later in `config.json`), start three background processes with PM2, and finally help you set up how you'll access the panel (domain / bare IP / SSH tunnel — your choice). **You only run this once.**
+> **Brand-new server that doesn't even have git yet?** Use this one-liner instead — it checks for/installs git, clones the repo, then hands off to `install.sh`:
+> ```bash
+> sudo bash <(curl -fsSL https://raw.githubusercontent.com/yibentq/nodenanny/main/bootstrap.sh)
+> ```
+> Make sure to use `bash <(curl ...)` exactly like that, not `curl ... | bash` — piping would leave `install.sh`'s later interactive prompts unable to read your keyboard input.
+
+The script will, in order: install Node.js / PM2, walk you through an interactive setup (node info, SMTP email, AI diagnosis, the backup node pool, the online terminal, and content sync can all be configured right here, or skipped and filled in later in `config.json`), start three background processes with PM2, and finally help you set up how you'll access the panel (domain / bare IP / SSH tunnel — your choice). **You only run this once.**
 
 Supported OS: Ubuntu 20.04 / 22.04 / 24.04, Debian 11 / 12.
 
