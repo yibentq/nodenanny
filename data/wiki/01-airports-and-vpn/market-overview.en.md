@@ -60,7 +60,7 @@ Publicly visible trends in recent years include: more frequent blocking of abnor
 
 ## Practical implications for individual users
 
-This section echoes the concrete avoidance guidance already covered in `red-flags.md`, and focuses here only on the structural framing:
+This section echoes the concrete avoidance guidance already covered in [Red flags](./red-flags), and focuses here only on the structural framing:
 
 - Treat an airport service as something that could disappear at any time, not as long-term infrastructure to depend on — this is also part of the real-world basis for NodeNanny's own positioning ("self-hosted node as primary, airport/traffic-pool as an emergency fallback only")
 - The savings from an annual or lifetime plan need to be weighed against the probability that "this provider won't last until the plan is used up" — especially for extremely-low-cost plans

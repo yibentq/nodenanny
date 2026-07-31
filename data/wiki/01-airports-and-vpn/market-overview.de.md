@@ -60,7 +60,7 @@ Der Großteil dieser Informationen stammt von nicht-unabhängigen Bewertungs-/Ra
 
 ## Praktische Implikationen für Einzelnutzer
 
-Dieser Abschnitt greift die konkreten Vermeidungshinweise auf, die bereits in `red-flags.md` behandelt werden, und betont hier nur die strukturelle Einordnung:
+Dieser Abschnitt greift die konkreten Vermeidungshinweise auf, die bereits unter [Warnsignale](./red-flags) behandelt werden, und betont hier nur die strukturelle Einordnung:
 
 - Einen Airport-Dienst als etwas behandeln, das "jederzeit verloren gehen kann", nicht als langfristig verlässliche Infrastruktur — das ist auch Teil der realen Grundlage für NodeNannys eigene Positionierung ("selbstgehosteter Knoten als Hauptweg, Airport/Traffic-Pool nur als Notfall-Fallback")
 - Die Ersparnis durch einen Jahres- oder Lebenszeit-Plan muss gegen die Wahrscheinlichkeit abgewogen werden, dass "dieser Anbieter nicht bis zum Ende des Plans durchhält" — besonders bei extrem günstigen Plänen
