@@ -26,6 +26,8 @@
     --rust: #c05a44;
     --rust-soft: #dd8468;
     --unknown: #5b6265;
+    --manual: #4d7fa8;
+    --manual-soft: #7ba7cc;
     --mortar: rgba(200, 150, 62, 0.07);
     --relic-glow: rgba(200, 150, 62, 0.18);
     --patina-mid: #8a7a45;
@@ -221,6 +223,41 @@
     line-height: 1.5;
   }
   .pool-banner.show { display: flex; }
+  /* 手动模式配色：蓝色而不是红色，让用户一眼分清"我自己切过去的"跟"出故障自动切的"，
+     不用点开事件日志才能确认。 */
+  .pool-banner.manual {
+    background: rgba(77, 127, 168, 0.12);
+    border-color: rgba(77, 127, 168, 0.38);
+    color: var(--manual-soft);
+  }
+  .pool-banner.manual .dot {
+    background: var(--manual-soft);
+    animation: dot-breathe-manual 2.4s ease-in-out infinite;
+  }
+  @keyframes dot-breathe-manual {
+    0%, 100% { opacity: 0.55; box-shadow: 0 0 0 2px rgba(77, 127, 168, 0.2); }
+    50% { opacity: 1; box-shadow: 0 0 0 5px rgba(77, 127, 168, 0.12); }
+  }
+  .pool-manual-toggle-btn {
+    display: none;
+    margin: -6px 0 14px 2px;
+    padding: 6px 14px;
+    font-size: 12.5px;
+    border-radius: 5px;
+    background: transparent;
+    border: 1px solid var(--brass-dim);
+    color: var(--brass-soft);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+  }
+  .pool-manual-toggle-btn.show { display: inline-block; }
+  .pool-manual-toggle-btn:hover { border-color: var(--brass); }
+  .pool-manual-toggle-btn.active {
+    border-color: var(--manual);
+    color: var(--manual-soft);
+  }
+  .pool-manual-toggle-btn.active:hover { border-color: var(--manual-soft); }
+  .pool-manual-toggle-btn:disabled { opacity: 0.5; cursor: not-allowed; }
   .pool-sources-line {
     margin: -8px 0 14px 2px;
     font-size: 12px;
@@ -447,6 +484,17 @@
   .lamp-core { fill: var(--unknown); transition: fill 0.4s ease; }
   body.status-ok .lamp-core { fill: var(--brass); }
   body.status-down .lamp-core { fill: var(--rust-soft); }
+
+  /* 手动模式的灯塔视觉——故意放在上面status-*规则之后，靠源码顺序覆盖：自建节点本身
+     状态可能还是ok（没真的挂），只是被用户手动切去用流量池了，这时候要盖掉status-ok
+     的金色，改成蓝色，节奏介于ok(慢/平静)和down(快/告急)之间，表示"人为、非故障"。 */
+  body.pool-manual .status-line { color: var(--manual-soft); }
+  body.pool-manual .sweep-slow { opacity: 1; animation: rotate-beam 5.5s linear infinite; }
+  body.pool-manual .sweep-fast { opacity: 1; animation: rotate-beam-rev 2.2s linear infinite; }
+  body.pool-manual #beam-shape-slow { stroke: url(#beamLineManual); }
+  body.pool-manual #beam-shape-fast { stroke: url(#beamLineManualDim); }
+  body.pool-manual .lamp-halo { fill: url(#lampGlowManual); animation: breathe 2.6s ease-in-out infinite; }
+  body.pool-manual .lamp-core { fill: var(--manual); }
 
   @media (prefers-reduced-motion: reduce) {
     .sweep-slow, .sweep-fast, .lamp-halo {
@@ -1062,6 +1110,7 @@
     </div>
     <div class="pool-sources-line" id="pool-sources-line" style="display:none;"></div>
     <div class="pool-sources-line" id="pool-active-nodes-line" style="display:none;"></div>
+    <button class="pool-manual-toggle-btn" id="pool-manual-toggle-btn" style="display:none;" onclick="handlePoolManualToggle()"></button>
 
     <div class="hero">
       <div class="rivet tl"></div><div class="rivet tr"></div><div class="rivet bl"></div><div class="rivet br"></div>
@@ -1150,6 +1199,21 @@
             <linearGradient id="beamLineUnknownDim" x1="150" y1="150" x2="150" y2="55" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stop-color="var(--unknown)" stop-opacity="0"/>
               <stop offset="100%" stop-color="var(--unknown)" stop-opacity="0.35"/>
+            </linearGradient>
+            <!-- 手动切换备用池模式专用配色（蓝色），跟status-ok(金)/status-down(红)/
+                 status-unknown(灰)区分开——这个状态是独立于status之外的一层视觉，靠
+                 body.pool-manual这个额外class叠加，不影响原来status-*那一套判断。 -->
+            <radialGradient id="lampGlowManual" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="var(--manual-soft)" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="var(--manual-soft)" stop-opacity="0"/>
+            </radialGradient>
+            <linearGradient id="beamLineManual" x1="150" y1="150" x2="150" y2="22" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--manual-soft)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--manual-soft)" stop-opacity="0.6"/>
+            </linearGradient>
+            <linearGradient id="beamLineManualDim" x1="150" y1="150" x2="150" y2="55" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--manual)" stop-opacity="0"/>
+              <stop offset="100%" stop-color="var(--manual)" stop-opacity="0.42"/>
             </linearGradient>
           </defs>
 
@@ -1394,6 +1458,11 @@ const I18N = {
     connError: '暂时连不上面板服务（不代表节点异常，可能是网络暂时中断，也可能是面板进程本身出了问题）',
     dataStale: '连不上面板服务，以下数字可能已经过时，不代表当前真实状态',
     poolBanner: '正在使用流量池应急节点——这是陌生人的服务器，仅临时使用，自建节点恢复后会自动切回',
+    poolBannerManual: '正在使用流量池应急节点——这是陌生人的服务器，仅临时使用。当前是你手动切过来的，不会自动切回，点下面的开关自己切回去',
+    poolManualToggleOn: '手动切到备用池',
+    poolManualToggleOff: '手动切回自建节点',
+    poolManualEmptyError: '流量池里暂时没有可用节点，切不了',
+    poolManualToggleError: '切换失败，稍后再试一次',
     poolSourcesSummary: (established, trial) => {
       if (established + trial === 0) return '';
       const parts = [];
@@ -1483,6 +1552,8 @@ const I18N = {
       restart_failed: p => `自动重启失败：${p.error || '未知错误'}`,
       pool_activated: p => `已临时切换到流量池应急节点（共 ${p.count || 0} 个备用节点）`,
       pool_deactivated: p => `自建节点已恢复，已自动切回自建订阅`,
+      pool_manual_activated: p => `已手动强制切换到流量池（共 ${p.count || 0} 个备用节点），不会因为自建节点恢复而自动切回`,
+      pool_manual_restored: () => `已手动切回自建节点订阅`,
       pool_refreshed: p => `流量池已刷新，当前 ${p.count || 0} 个备用节点`,
       pool_refresh_failed: p => `流量池刷新失败：${p.error || '未知错误'}`,
       pool_unavailable: p => `节点异常，但流量池暂无可用备用节点`,
@@ -1523,6 +1594,11 @@ const I18N = {
     connError: "Can't reach the panel service right now (not necessarily a node problem — could be a temporary network hiccup, or an issue with the panel process itself)",
     dataStale: "Can't reach the panel service — the numbers below may be out of date and may not reflect the current real status",
     poolBanner: "Running on the backup pool right now — these are strangers' servers, for temporary use only. It'll switch back automatically once your own node recovers.",
+    poolBannerManual: "Running on the backup pool right now — these are strangers' servers, for temporary use only. You switched here manually, so it won't switch back on its own — use the toggle below when you're ready.",
+    poolManualToggleOn: 'Switch to backup pool',
+    poolManualToggleOff: 'Switch back to my node',
+    poolManualEmptyError: 'No backup nodes available right now — cannot switch.',
+    poolManualToggleError: 'Switch failed, please try again.',
     poolSourcesSummary: (established, trial) => {
       if (established + trial === 0) return '';
       const parts = [];
@@ -1612,6 +1688,8 @@ const I18N = {
       restart_failed: p => `Automatic restart failed: ${p.error || 'unknown error'}`,
       pool_activated: p => `Switched to the backup pool temporarily (${p.count || 0} nodes available)`,
       pool_deactivated: p => `Your node is back — switched back to your own subscription`,
+      pool_manual_activated: p => `Manually forced to the backup pool (${p.count || 0} nodes available) — won't auto-revert even after your node recovers`,
+      pool_manual_restored: () => `Manually switched back to your own node's subscription`,
       pool_refreshed: p => `Backup pool refreshed — ${p.count || 0} nodes now available`,
       pool_refresh_failed: p => `Backup pool refresh failed: ${p.error || 'unknown error'}`,
       pool_unavailable: p => `Node is down and no backup nodes are available yet`,
@@ -1652,6 +1730,11 @@ const I18N = {
     connError: 'パネルが今サービスに接続できません（ノードの異常とは限りません。一時的なネットワークの問題か、パネル自体の不具合の可能性があります）',
     dataStale: 'パネルに接続できません。以下の数値は古い情報の可能性があり、現在の実際の状態を反映していない場合があります',
     poolBanner: '現在は予備プールの緊急ノードを使用中です——見知らぬ人のサーバーなので一時的な利用にとどめてください。自建ノードが復旧すれば自動的に戻ります',
+    poolBannerManual: '現在は予備プールの緊急ノードを使用中です——見知らぬ人のサーバーなので一時的な利用にとどめてください。手動で切り替えたため自動では戻りません。戻す場合は下のボタンを押してください',
+    poolManualToggleOn: '手動で予備プールに切替',
+    poolManualToggleOff: '手動で自建ノードに戻す',
+    poolManualEmptyError: '予備プールに利用可能なノードがないため切り替えできません',
+    poolManualToggleError: '切り替えに失敗しました。しばらくしてからもう一度お試しください',
     poolSourcesSummary: (established, trial) => {
       if (established + trial === 0) return '';
       const parts = [];
@@ -1741,6 +1824,8 @@ const I18N = {
       restart_failed: p => `自動再起動に失敗：${p.error || '不明なエラー'}`,
       pool_activated: p => `予備プールの緊急ノードに一時切替しました（利用可能 ${p.count || 0} 件）`,
       pool_deactivated: p => `ノードが復旧したため、自建の購読に自動的に戻しました`,
+      pool_manual_activated: p => `手動で予備プールに強制切替しました（利用可能 ${p.count || 0} 件）。ノードが復旧しても自動では戻りません`,
+      pool_manual_restored: () => `手動で自建ノードの購読に戻しました`,
       pool_refreshed: p => `予備プールを更新しました（現在 ${p.count || 0} 件）`,
       pool_refresh_failed: p => `予備プールの更新に失敗：${p.error || '不明なエラー'}`,
       pool_unavailable: p => `ノードが異常ですが、利用可能な予備ノードがまだありません`,
@@ -1781,6 +1866,11 @@ const I18N = {
     connError: 'Panel erreicht den Dienst gerade nicht (nicht unbedingt ein Node-Problem — kann ein vorübergehendes Netzwerkproblem sein oder am Panel-Prozess selbst liegen)',
     dataStale: 'Panel nicht erreichbar — die folgenden Zahlen sind möglicherweise veraltet und spiegeln nicht unbedingt den aktuellen Status wider',
     poolBanner: 'Läuft gerade über den Notfall-Pool — das sind fremde Server, nur zur vorübergehenden Nutzung. Sobald dein eigener Knoten wieder da ist, wird automatisch zurückgeschaltet.',
+    poolBannerManual: 'Läuft gerade über den Notfall-Pool — das sind fremde Server, nur zur vorübergehenden Nutzung. Du hast manuell umgeschaltet, daher schaltet es nicht automatisch zurück — nutze unten den Schalter, wenn du bereit bist.',
+    poolManualToggleOn: 'Auf Notfall-Pool umschalten',
+    poolManualToggleOff: 'Zurück auf eigenen Knoten',
+    poolManualEmptyError: 'Gerade keine Backup-Knoten verfügbar — Umschalten nicht möglich.',
+    poolManualToggleError: 'Umschalten fehlgeschlagen, bitte später erneut versuchen.',
     poolSourcesSummary: (established, trial) => {
       if (established + trial === 0) return '';
       const parts = [];
@@ -1870,6 +1960,8 @@ const I18N = {
       restart_failed: p => `Automatischer Neustart fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
       pool_activated: p => `Vorübergehend auf den Notfall-Pool umgeschaltet (${p.count || 0} Knoten verfügbar)`,
       pool_deactivated: p => `Eigener Knoten wieder da — zurück auf dein eigenes Abo umgeschaltet`,
+      pool_manual_activated: p => `Manuell auf den Notfall-Pool erzwungen (${p.count || 0} Knoten verfügbar) — schaltet auch nach Wiederherstellung nicht automatisch zurück`,
+      pool_manual_restored: () => `Manuell zurück auf das eigene Abo umgeschaltet`,
       pool_refreshed: p => `Notfall-Pool aktualisiert — jetzt ${p.count || 0} Knoten verfügbar`,
       pool_refresh_failed: p => `Aktualisierung des Notfall-Pools fehlgeschlagen: ${p.error || 'unbekannter Fehler'}`,
       pool_unavailable: p => `Knoten gestört, aber noch keine Ersatzknoten verfügbar`,
@@ -1910,6 +2002,11 @@ const I18N = {
     connError: 'Панель сейчас недоступна (это не обязательно означает неисправность узла — возможно, временный сбой сети или проблема самой панели)',
     dataStale: 'Нет связи с панелью — цифры ниже могут быть устаревшими и не отражать текущее реальное состояние',
     poolBanner: 'Сейчас используется резервный пул — это серверы незнакомцев, только для временного использования. Как только ваш узел восстановится, произойдёт автоматическое переключение обратно.',
+    poolBannerManual: 'Сейчас используется резервный пул — это серверы незнакомцев, только для временного использования. Вы переключились вручную, поэтому автоматического возврата не будет — используйте переключатель ниже, когда будете готовы.',
+    poolManualToggleOn: 'Переключить на резервный пул',
+    poolManualToggleOff: 'Вернуться на свой узел',
+    poolManualEmptyError: 'Сейчас нет доступных резервных узлов — переключение невозможно.',
+    poolManualToggleError: 'Не удалось переключить, попробуйте позже.',
     poolSourcesSummary: (established, trial) => {
       if (established + trial === 0) return '';
       const parts = [];
@@ -1999,6 +2096,8 @@ const I18N = {
       restart_failed: p => `Не удалось перезапустить: ${p.error || 'неизвестная ошибка'}`,
       pool_activated: p => `Временно переключено на резервный пул (доступно узлов: ${p.count || 0})`,
       pool_deactivated: p => `Узел восстановлен — переключено обратно на вашу подписку`,
+      pool_manual_activated: p => `Вручную принудительно переключено на резервный пул (доступно узлов: ${p.count || 0}) — не переключится обратно автоматически`,
+      pool_manual_restored: () => `Вручную переключено обратно на собственный узел`,
       pool_refreshed: p => `Резервный пул обновлён — доступно узлов: ${p.count || 0}`,
       pool_refresh_failed: p => `Не удалось обновить резервный пул: ${p.error || 'неизвестная ошибка'}`,
       pool_unavailable: p => `Узел недоступен, а резервных узлов пока нет`,
@@ -2022,6 +2121,7 @@ if (!I18N[lang]) lang = 'en';
 let latestData = null;
 let latestStarmapData = null;
 let poolActiveNow = false;
+let poolManualToggleBusy = false; // 防止手快连点，切换请求进行中时按钮先禁用
 
 function t() { return I18N[lang]; }
 
@@ -2118,7 +2218,7 @@ function renderLog(events) {
   }
   const TICK = {
     down: '✕', recovered: '✓', restart: '↻', restart_failed: '!',
-    pool_activated: '⇄', pool_deactivated: '⇄', pool_refreshed: '↻', pool_refresh_failed: '!', pool_unavailable: '!',
+    pool_activated: '⇄', pool_deactivated: '⇄', pool_manual_activated: '⇄', pool_manual_restored: '⇄', pool_refreshed: '↻', pool_refresh_failed: '!', pool_unavailable: '!',
     ai_diagnosis: '✦', ai_diagnosis_failed: '!',
     usability_ok: '✓', usability_down: '⚠', usability_check_error: '!', usability_restart_suggested: '!', usability_auto_restart: '↻',
     kb_sync_applied: '⇄', wiki_sync_applied: '⇄', source_list_sync_applied: '⇄',
@@ -2212,7 +2312,20 @@ function renderData(data) {
   document.getElementById('label-interval').textContent = d.labelInterval(data.checkIntervalMinutes || '—');
   const poolBanner = document.getElementById('pool-banner');
   const usingPool = !!(data.pool && data.pool.activeSource === 'pool');
+  const manualOverride = !!(data.pool && data.pool.manualOverride);
   poolBanner.classList.toggle('show', usingPool);
+  poolBanner.classList.toggle('manual', manualOverride);
+  document.getElementById('pool-banner-text').textContent = manualOverride ? d.poolBannerManual : d.poolBanner;
+  // 手动模式的灯塔视觉是叠加在status-*之上的独立class，跟status本身是不是ok/down无关——
+  // 自建节点没准还是好的，只是被手动切去用池子了，这时候也要显蓝色，不能被status-ok盖过去。
+  document.body.classList.toggle('pool-manual', manualOverride);
+  // 手动切换开关按钮：流量池功能没开的话直接隐藏，不给用户一个点了也没用的按钮。
+  const manualToggleBtn = document.getElementById('pool-manual-toggle-btn');
+  const poolFeatureEnabled = !!(data.pool && data.pool.enabled);
+  manualToggleBtn.classList.toggle('show', poolFeatureEnabled);
+  manualToggleBtn.classList.toggle('active', manualOverride);
+  manualToggleBtn.textContent = manualOverride ? d.poolManualToggleOff : d.poolManualToggleOn;
+  manualToggleBtn.disabled = poolManualToggleBusy;
   // 复查发现的遗漏(本轮补完,不是新需求):问题8的前端展示此前只加了容器div和五语言文案
   // (poolSourcesSummary),但从没有代码真正读取data.pool.sources、算出来源统计、填进这个
   // div——用户此前完全看不到"来源可信状态"，跟后端已经落盘的数据是脱节的。这里补上：
@@ -2970,6 +3083,34 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
     window.location.href = '/login.html';
   }
 });
+
+// 手动切换备用池开关：点一下调切换接口，切换完刷新一次面板数据，让灯塔视觉/横幅/
+// 按钮文案立刻反映最新状态，不用等下一轮30秒轮询。
+async function handlePoolManualToggle() {
+  if (poolManualToggleBusy) return;
+  poolManualToggleBusy = true;
+  const btn = document.getElementById('pool-manual-toggle-btn');
+  btn.disabled = true;
+  const d = t();
+  try {
+    const res = await fetch('/api/pool/manual-toggle', { method: 'POST' });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || !result.ok) {
+      if (result.error === 'pool_empty') {
+        alert(d.poolManualEmptyError);
+      } else {
+        alert(d.poolManualToggleError);
+      }
+      return;
+    }
+    await refresh();
+  } catch (err) {
+    alert(d.poolManualToggleError);
+  } finally {
+    poolManualToggleBusy = false;
+    btn.disabled = false;
+  }
+}
 
 document.getElementById('ai-diagnose-btn').addEventListener('click', async (e) => {
   const btn = e.currentTarget;

@@ -227,6 +227,7 @@ function main() {
       pool: {
         enabled: poolEnabled,
         activeSource: state.activeSource || 'self',
+        manualOverride: !!state.poolManualOverride,
         nodeCount: poolData ? poolData.nodes.length : 0,
         updatedAt: poolData ? poolData.updatedAt : null,
         // 修复记录:此前refreshPool()内部其实算出了很详细的per-source摘要
@@ -312,6 +313,31 @@ function main() {
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
     }
+  });
+
+  // 手动切换备用池开关（founder拍板，跟checker.js的自动切换是两条独立的线）：用户不想等
+  // 自建节点真的挂了才用上流量池，可以在面板上主动点一下强制切过去；再点一次切回来。
+  // 用一个开关按钮而不是两个独立按钮——当前状态由 state.poolManualOverride 决定下一步动作。
+  app.post('/api/pool/manual-toggle', (req, res) => {
+    if (!config.pool || !config.pool.enabled) {
+      return res.status(400).json({ ok: false, error: 'pool_disabled' });
+    }
+    const state = store.getState();
+    if (state.poolManualOverride) {
+      // 当前是手动pool模式，切回自建节点，恢复自动挡
+      store.updateState({ activeSource: 'self', poolManualOverride: false });
+      store.addEvent('pool_manual_restored', {});
+      return res.json({ ok: true, activeSource: 'self', manualOverride: false });
+    }
+    // 当前是self（或理论上checker.js自动切的pool，但那种情况下poolManualOverride本来就是false，
+    // 走到这里说明用户是在自动挡pool状态下又手动点了一次，效果是"接管"成手动挡，同样需要校验节点数）
+    const poolData = pool.getPool();
+    if (!poolData.nodes || poolData.nodes.length === 0) {
+      return res.status(400).json({ ok: false, error: 'pool_empty' });
+    }
+    store.updateState({ activeSource: 'pool', poolManualOverride: true });
+    store.addEvent('pool_manual_activated', { count: poolData.nodes.length });
+    return res.json({ ok: true, activeSource: 'pool', manualOverride: true });
   });
 
   // 手动触发一次AI诊断，方便测试或者用户想主动问一次，不用等连续失败3次自动触发。

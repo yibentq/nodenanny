@@ -237,8 +237,10 @@ async function runCheck(config) {
           console.error('[checker] 恢复通知邮件发送失败：', err.message);
         }
       }
-      // 自建节点恢复了，自动切回自建订阅、流量池停用（如果之前在用的话）
-      if (prevState.activeSource === 'pool') {
+      // 自建节点恢复了，自动切回自建订阅、流量池停用（如果之前在用的话）——但如果当前是
+      // 用户手动强制切到pool的（poolManualOverride），这条自动切回逻辑要跳过，等用户自己
+      // 在面板上点开关切回来，不然手动切换形同虚设。
+      if (prevState.activeSource === 'pool' && !prevState.poolManualOverride) {
         store.updateState({ activeSource: 'self' });
         store.addEvent('pool_deactivated', { node: node.name });
       }

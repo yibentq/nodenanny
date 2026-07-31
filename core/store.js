@@ -30,6 +30,10 @@ function ensureStore() {
         restartsTodayDate: new Date().toISOString().slice(0, 10),
         lastNotifyAt: null,
         activeSource: 'self', // 'self' | 'pool' —— 当前对外提供的订阅走的是自建节点还是应急流量池
+        poolManualOverride: false, // 手动切换备用池功能：true表示当前是人工强制切到pool的，
+        // 不是checker.js自动检测出故障切过去的。这个标记为true时，checker.js里"自建节点
+        // 恢复了就自动切回self"那条逻辑要跳过——不然用户手动切完，下一轮检测自建节点是好的，
+        // 立刻就被自动切回去了，等于白切。清除方式只有用户自己在面板上再点一次开关。
         consecutiveFailures: 0, // 连续检测失败次数，恢复后清零，用于触发AI诊断（避免单次抖动就调用API）
         lastDiagnosis: null, // { at, text, error } —— 最近一次AI诊断结果，覆盖式存储
         aiDiagnosedThisIncident: false // 本次故障期是否已经自动触发过一次AI诊断，恢复后清零
@@ -58,6 +62,7 @@ function readStore() {
         restartsTodayDate: new Date().toISOString().slice(0, 10),
         lastNotifyAt: null,
         activeSource: 'self',
+        poolManualOverride: false,
         consecutiveFailures: 0,
         lastDiagnosis: null,
         aiDiagnosedThisIncident: false
