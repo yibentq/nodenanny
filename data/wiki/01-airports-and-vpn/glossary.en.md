@@ -2,7 +2,7 @@
 title: "Glossary: the jargon that trips up newcomers"
 summary: Airport, node, rate multiplier, relay, landing, leased line, residential IP... after this page you should be able to follow along in the community chats
 order: 1
-updated: 2026-07-23
+updated: 2026-07-31
 tags: [glossary, primer, beginner]
 ---
 
@@ -89,6 +89,97 @@ but no single tool's result is authoritative — cross-checking and actually try
 node yourself matters more than fixating on one score.
 
 ## Client & configuration terms
+
+**What proxy client software actually is**
+"Proxy software" (Clash, V2rayN, Shadowrocket, sing-box, etc.) is a program dedicated
+to "talking to servers according to a protocol's rules." Think of it as a dedicated
+interpreter-and-dispatcher: it knows how to speak Shadowsocks/VMess/VLESS/Trojan to a
+server and establish an encrypted tunnel, and it also intercepts the network requests
+coming from every other app on your phone or computer — sending the ones that should go
+through the proxy into the tunnel, and letting everything else pass through directly.
+You don't need to understand any protocol details yourself; the client handles all of
+that behind the scenes.
+
+**Why pasting a subscription link just works**
+Node information (server address, port, encryption method, key, etc.) has a
+standardized, industry-agreed-upon shorthand — things like `vmess://a-long-encoded-
+string`, `ss://a-long-encoded-string`, `trojan://a-long-encoded-string`. These are
+essentially all those parameters packed into a single line of text. When you open the
+"subscription link" from a provider (or from your own node), what you get back is
+usually a batch of links like these (base64-encoded, so they look like gibberish).
+Client apps recognize this standard format, and once they read the subscription link
+they automatically parse out the parameters, lay them out correctly, and generate a
+complete working configuration — which is why all you have to do is "copy the link →
+paste it into the app → tap connect," without ever manually typing in a server address
+or port number.
+
+It's also precisely because this format is standardized and interoperable across
+vendors that so many different clients — Clash, V2rayN, Shadowrocket — can coexist: the
+same `vmess://` link can, in principle, be recognized and imported by most of them; only
+the interface and the extra features (routing rules, how many protocols are supported)
+differ. This is also why a client sometimes "can't recognize" a given subscription —
+usually because what you were given is a client-specific extended format (like Clash's
+YAML config), not the universal single-node link format. It's not that the subscription
+itself is broken.
+
+**And then there's an even more "foolproof" case: open the app, tap once, and you're
+connected**
+This kind of app is common on Android in particular (especially APKs shared through
+forums or cloud-drive links, not necessarily from an app store). Its defining trait is
+that you never paste any subscription link and never see any server parameters at all —
+you just open it, there's a "one-tap connect" button, and tapping it gets you online.
+Compilations of domestic administrative-penalty cases around circumvention tools
+repeatedly mention exactly this kind of "works out of the box" app (Lantern, Kuailian,
+Kuaimiao, and similar names) as one of the common categories, which suggests this is far
+from a niche phenomenon.
+
+The mechanism here has nothing to do with pasting a subscription link. Behind this kind
+of app is usually a batch of servers the developer runs and operates long-term; the
+server address and account information are already baked into the app at install time
+(sometimes packaged directly into the install file, sometimes the app quietly reaches
+out to the developer's own dispatch server on launch to request an available node,
+entirely behind the scenes, invisible to you) — which skips the step of "the user finds
+their own node and imports a subscription" altogether.
+
+This kind of app shows up more on Android mainly because Android allows installing an
+APK directly, bypassing the app store ("sideloading"), with a much lower barrier than
+iOS. Apple's App Store review is far stricter about tools like this, so most equivalent
+apps never make it onto the store — which is why iOS users more commonly end up with the
+"download a client + find your own subscription" pattern instead.
+
+A few things worth paying attention to with this kind of app, backed by some solid data:
+
+- A 2026 study presented at the NDSS Symposium (Network and Distributed System Security
+  Symposium) used an automated framework to audit 281 free Android VPN/accelerator
+  apps, covering a combined total of more than 2.4 billion installs. Findings included:
+  5 apps had a "tunnel hijacking" vulnerability (node configuration files were
+  downloaded without encryption, meaning an attacker on the same Wi-Fi could intercept
+  and tamper with the file, silently redirecting your connection to a server the
+  attacker controls while the app's interface still shows a normal "connected" status);
+  24 apps leaked DNS requests (meaning even with traffic encrypted, your carrier can
+  still see which sites you visited), affecting roughly 360 million installs; and
+  246 of the 281 apps (over 87%) contacted advertising or tracking services, with some
+  even transmitting the device's precise GPS location. The researchers specifically
+  noted that a "Verified" badge on an app store is not evidence that an app has
+  undergone a comprehensive security review.
+- A service that's completely free with no data caps or speed limits has an operating
+  cost that isn't obvious — common ways it gets monetized include inserting ads,
+  collecting device information for targeted marketing, and, less commonly, bundling
+  in other software during install.
+- The November 2025 warning from China's Ministry of State Security (see [Overview of
+  Domestic Internet Regulation in China](../04-compliance-and-risk/overview)) also
+  noted that some circumvention software is controlled by overseas actors — or even
+  directly developed and operated by overseas intelligence agencies — with malware
+  covertly embedded. There have been cases of employees at classified-work units
+  installing such software by mistake, leading to their devices being remotely
+  controlled and materials being stolen. That's not scaremongering — it's a real case
+  type from an official notice.
+- Compared to a model where "you know who's running the server" — self-hosting your own
+  node, or using a provider with a clear reputation and transparent origins — this kind
+  of "black-box" app's trustworthiness rests entirely on the developer. The less
+  transparent the information, the more caution is warranted in evaluating the source;
+  a high download count or a polished interface alone shouldn't be taken as a sign of
+  safety.
 
 **Rule mode**
 Traffic is automatically routed according to rules in the config: domestic sites go
