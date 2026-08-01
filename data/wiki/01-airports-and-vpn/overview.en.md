@@ -31,6 +31,10 @@ commercial information.
 - [Current state of the domestic "airport" market](./market-overview) — the
   industry's overall structure, the cost/acquisition logic behind extremely-low-cost
   plans, and why shutdowns are a structural norm
+- [How node region relates to platform access](./region-and-access) — which
+  domestic platforms restrict overseas IPs, which overseas platforms restrict
+  datacenter IPs, and what the common node regions (HK/TW/JP/SG/US) are each
+  typically good for
 
 ## What this deliberately does not cover
 

@@ -35,6 +35,10 @@ Abo-Links, Zugangsdaten oder sonstige kommerziellen Informationen.
 - [Aktueller Stand des inländischen "Airport"-Marktes](./market-overview) — die
   Gesamtstruktur der Branche, die Kosten-/Akquiselogik hinter extrem günstigen
   Angeboten, und warum Schließungen ein struktureller Normalfall sind
+- [Wie der Node-Standort den Plattformzugriff beeinflusst](./region-and-access) —
+  welche inländischen Plattformen Auslands-IPs sperren, welche Auslandsplattformen
+  Rechenzentrums-IPs sperren, und wofür die gängigen Node-Regionen (HK/TW/JP/SG/US)
+  jeweils typischerweise geeignet sind
 
 ## Was diese Kategorie bewusst nicht abdeckt
 
