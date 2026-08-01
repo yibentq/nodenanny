@@ -2658,7 +2658,7 @@ let syncKbState = { checked: false, hasUpdate: false, applied: false, entryCount
 let syncWikiState = { checked: false, hasUpdate: false, applied: false, trackedFileCount: 0, added: 0, changed: 0, removed: 0, downloadedCount: 0, removedCount: 0, error: null, lastAppliedAt: null };
 // 官方节点来源列表同步(v39新增)：走的是跟kb-sync一模一样的"check→diff→人工确认合并"三步流程，
 // 合并对象是真实config.json里的pool.manualSources，见core/source-list-sync.js。
-let syncSourcesState = { checked: false, hasUpdate: false, applied: false, sourceCount: 0, added: 0, modified: 0, removed: 0, appliedCount: 0, error: null };
+let syncSourcesState = { checked: false, hasUpdate: false, applied: false, sourceCount: 0, added: 0, modified: 0, removed: 0, pendingAcceptedIds: [], appliedCount: 0, error: null };
 
 function renderSyncKb() {
   const d = t();
@@ -2902,8 +2902,14 @@ document.getElementById('sync-sources-check-btn').addEventListener('click', asyn
       // "undefined is not an object (evaluating 'diff.added.length')"。另外这个同步机制
       // 设计上只会新增/更新本地manualSources,从不会删除founder自己已有的源,所以removed
       // 恒为0,不是漏算,是这个功能本来就没有"移除"这个概念。
+      // 2026-08-01再修复:光算对了added/modified的数量还不够——"确认合并"按钮点击时
+      // 需要知道具体是哪些id要合并,所以这里把toAdd/toUpdate里的id都存进
+      // syncSourcesState.pendingAcceptedIds,供下面apply按钮的handler直接用。
+      const pendingAcceptedIds = diff.ok
+        ? [...diff.toAdd.map((e) => e.id), ...diff.toUpdate.map((c) => c.id)]
+        : [];
       syncSourcesState = diff.ok
-        ? { checked: true, hasUpdate: true, added: diff.toAdd.length, modified: diff.toUpdate.length, removed: 0, sourceCount: data.sourceCount, error: null }
+        ? { checked: true, hasUpdate: true, added: diff.toAdd.length, modified: diff.toUpdate.length, removed: 0, sourceCount: data.sourceCount, pendingAcceptedIds, error: null }
         : { checked: true, error: diff.error || 'diff_failed' };
     } else {
       syncSourcesState = { checked: true, hasUpdate: false, sourceCount: data.sourceCount, error: null };
@@ -2922,8 +2928,12 @@ document.getElementById('sync-sources-apply-btn').addEventListener('click', asyn
   btn.disabled = true;
   btn.textContent = d.syncApplyingBtn;
   try {
+    // 2026-08-01修复:这里之前一直发空body,后端applyStaging()收到的acceptedIds
+    // 永远是undefined→空数组,导致点"确认合并"实际什么都不会合并("已合并0个来源")。
+    // 现在把"检查更新"那一步存下来的pendingAcceptedIds(toAdd+toUpdate的id全集)传过去。
     const res = await fetch('/api/sources/sync/apply', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({})
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ acceptedIds: syncSourcesState.pendingAcceptedIds || [] })
     });
     const data = await res.json();
     syncSourcesState = data.ok
