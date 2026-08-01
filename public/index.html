@@ -2897,8 +2897,13 @@ document.getElementById('sync-sources-check-btn').addEventListener('click', asyn
     } else if (data.hasUpdate) {
       const diffRes = await fetch('/api/sources/sync/diff');
       const diff = await diffRes.json();
+      // 2026-08-01修复:后端diffStagingAgainstCurrent()返回的字段是toAdd/toUpdate/conflicts,
+      // 不是added/modified/removed——这里之前一直读不存在的字段,导致点"检查更新"必现
+      // "undefined is not an object (evaluating 'diff.added.length')"。另外这个同步机制
+      // 设计上只会新增/更新本地manualSources,从不会删除founder自己已有的源,所以removed
+      // 恒为0,不是漏算,是这个功能本来就没有"移除"这个概念。
       syncSourcesState = diff.ok
-        ? { checked: true, hasUpdate: true, added: diff.added.length, modified: diff.modified.length, removed: diff.removed.length, sourceCount: data.sourceCount, error: null }
+        ? { checked: true, hasUpdate: true, added: diff.toAdd.length, modified: diff.toUpdate.length, removed: 0, sourceCount: data.sourceCount, error: null }
         : { checked: true, error: diff.error || 'diff_failed' };
     } else {
       syncSourcesState = { checked: true, hasUpdate: false, sourceCount: data.sourceCount, error: null };
