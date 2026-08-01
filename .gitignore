@@ -11,3 +11,9 @@ data/kb-staging.json
 data/wiki-staging/
 data/pool-events.json
 data/discovered-sources.json
+
+# Mac系统在几乎每个目录下自动生成的缩略图/元数据缓存文件，跟项目内容无关，
+# 不该进git——founder本轮反馈几乎每个子目录（config/、core/、data/、
+# data/wiki/、deploy/等）都有一个，加这条规则一次性全部忽略，不用每次
+# git status都手动跳过。
+.DS_Store
