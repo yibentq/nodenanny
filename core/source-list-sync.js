@@ -208,6 +208,11 @@ async function checkForUpdate(sourceListSyncConfig) {
   return {
     ok: true,
     hasUpdate: diff.toAdd.length > 0 || diff.toUpdate.length > 0,
+    // 2026-08-01修复:之前这里没有sourceCount字段,导致面板"已是最新"分支显示
+    // "当前共有 undefined 个候选来源"。这里等于远程列表的条目总数——四个diff分类
+    // (toAdd/toUpdate/conflicts/unchangedCount)加起来正好是exhaustive partition,
+    // 覆盖了remoteEntries里的每一条,不用另外单独存一份remoteEntries.length。
+    sourceCount: diff.toAdd.length + diff.toUpdate.length + diff.conflicts.length + diff.unchangedCount,
     addedCount: diff.toAdd.length,
     updatedCount: diff.toUpdate.length,
     conflictCount: diff.conflicts.length,
