@@ -696,20 +696,20 @@ MSG[ja:ai_provider_choose]="選択してください [デフォルト: 1]: "
 MSG[de:ai_provider_choose]="Wähle eine Option [Standard: 1]: "
 MSG[ru:ai_provider_choose]="Выберите вариант [по умолчанию: 1]: "
 
-MSG[zh:ai_baseurl_prompt]="接口的域名是什么？（只填域名，不带 http(s):// 前缀，例如智谱填 open.bigmodel.cn）: "
-MSG[en:ai_baseurl_prompt]="What's the endpoint's domain? (hostname only, no http(s):// prefix, e.g. open.bigmodel.cn for Zhipu): "
-MSG[ja:ai_baseurl_prompt]="エンドポイントのドメインは？（ホスト名のみ、http(s)://は不要。例：智譜なら open.bigmodel.cn）: "
-MSG[de:ai_baseurl_prompt]="Wie lautet die Domain des Endpunkts? (nur Hostname, ohne http(s)://-Präfix, z. B. open.bigmodel.cn für Zhipu): "
-MSG[ru:ai_baseurl_prompt]="Каков домен эндпоинта? (только hostname, без http(s)://, напр. open.bigmodel.cn для Zhipu): "
+MSG[zh:ai_baseurl_prompt]="接口的域名是什么？（只填域名，${C_YELLOW}不带 http(s):// 前缀${C_RESET}，例如智谱填 open.bigmodel.cn）: "
+MSG[en:ai_baseurl_prompt]="What's the endpoint's domain? (hostname only, ${C_YELLOW}no http(s):// prefix${C_RESET}, e.g. open.bigmodel.cn for Zhipu): "
+MSG[ja:ai_baseurl_prompt]="エンドポイントのドメインは？（ホスト名のみ、${C_YELLOW}http(s)://は不要${C_RESET}。例：智譜なら open.bigmodel.cn）: "
+MSG[de:ai_baseurl_prompt]="Wie lautet die Domain des Endpunkts? (nur Hostname, ${C_YELLOW}ohne http(s)://-Präfix${C_RESET}, z. B. open.bigmodel.cn für Zhipu): "
+MSG[ru:ai_baseurl_prompt]="Каков домен эндпоинта? (только hostname, ${C_YELLOW}без http(s)://${C_RESET}, напр. open.bigmodel.cn для Zhipu): "
 
 # apiPath默认走config.example.json里已经文档化的OpenAI标准路径/v1/chat/completions；
 # 不是每个第三方接口都用这个路径（智谱实测是/api/paas/v4/chat/completions），
 # 所以这里必须让用户自己确认，不能替他们悄悄假设一个可能是错的默认值。
-MSG[zh:ai_apipath_prompt]="接口路径是什么？不确定就直接回车，默认用 OpenAI 标准路径 /v1/chat/completions（部分第三方接口不一样，比如智谱是 /api/paas/v4/chat/completions，请去对应服务商文档确认）: "
-MSG[en:ai_apipath_prompt]="What's the API path? Press Enter to use the OpenAI-standard default /v1/chat/completions if unsure (some third-party providers differ — e.g. Zhipu uses /api/paas/v4/chat/completions — check your provider's docs): "
-MSG[ja:ai_apipath_prompt]="APIパスは？わからなければEnterでOpenAI標準の/v1/chat/completionsを使用します（一部のサードパーティは異なります。例：智譜は/api/paas/v4/chat/completions。提供元のドキュメントで確認してください）: "
-MSG[de:ai_apipath_prompt]="Wie lautet der API-Pfad? Bei Unsicherheit Enter drücken für den OpenAI-Standardpfad /v1/chat/completions (manche Drittanbieter weichen ab — z. B. Zhipu nutzt /api/paas/v4/chat/completions — bitte die Doku des Anbieters prüfen): "
-MSG[ru:ai_apipath_prompt]="Каков путь API? Если не уверены, нажмите Enter для стандартного OpenAI-пути /v1/chat/completions (у некоторых сторонних провайдеров он другой — напр. у Zhipu /api/paas/v4/chat/completions — уточните в документации провайдера): "
+MSG[zh:ai_apipath_prompt]="接口路径是什么？不确定就直接回车，默认用 OpenAI 标准路径 /v1/chat/completions（${C_YELLOW}部分第三方接口不一样，比如智谱是 /api/paas/v4/chat/completions，请去对应服务商文档确认${C_RESET}）: "
+MSG[en:ai_apipath_prompt]="What's the API path? Press Enter to use the OpenAI-standard default /v1/chat/completions if unsure (${C_YELLOW}some third-party providers differ — e.g. Zhipu uses /api/paas/v4/chat/completions — check your provider's docs${C_RESET}): "
+MSG[ja:ai_apipath_prompt]="APIパスは？わからなければEnterでOpenAI標準の/v1/chat/completionsを使用します（${C_YELLOW}一部のサードパーティは異なります。例：智譜は/api/paas/v4/chat/completions。提供元のドキュメントで確認してください${C_RESET}）: "
+MSG[de:ai_apipath_prompt]="Wie lautet der API-Pfad? Bei Unsicherheit Enter drücken für den OpenAI-Standardpfad /v1/chat/completions (${C_YELLOW}manche Drittanbieter weichen ab — z. B. Zhipu nutzt /api/paas/v4/chat/completions — bitte die Doku des Anbieters prüfen${C_RESET}): "
+MSG[ru:ai_apipath_prompt]="Каков путь API? Если не уверены, нажмите Enter для стандартного OpenAI-пути /v1/chat/completions (${C_YELLOW}у некоторых сторонних провайдеров он другой — напр. у Zhipu /api/paas/v4/chat/completions — уточните в документации провайдера${C_RESET}): "
 
 MSG[zh:ai_apikey_prompt]="粘贴你的 API Key（输入时不显示，回车确认）: "
 MSG[en:ai_apikey_prompt]="Paste your API Key (hidden while typing, press Enter to confirm): "
@@ -726,17 +726,17 @@ MSG[ru:ai_model_prompt]="Указать модель? (Anthropic по умолч
 # 本轮新增：openai-compatible分支专用，跟上面ai_model_prompt不一样——那个可以
 # 直接回车走运行时兜底默认值，这个不行（ai-provider.js对这条路径没有默认模型名，
 # 留空会直接诊断失败），所以提示文字和校验逻辑都单独区分开，不能共用同一个key。
-MSG[zh:ai_model_required_prompt]="填写模型名称（第三方接口没有默认模型，必须填写，例如智谱填 glm-4.7-flash）: "
-MSG[en:ai_model_required_prompt]="Enter the model name (required for third-party endpoints — there's no default, e.g. glm-4.7-flash for Zhipu): "
-MSG[ja:ai_model_required_prompt]="モデル名を入力してください（サードパーティ接続にはデフォルトがないため必須です。例：智譜なら glm-4.7-flash）: "
-MSG[de:ai_model_required_prompt]="Modellnamen eingeben (bei Drittanbieter-Endpunkten erforderlich, es gibt keinen Standard, z. B. glm-4.7-flash für Zhipu): "
-MSG[ru:ai_model_required_prompt]="Введите название модели (обязательно для сторонних endpoint'ов — значения по умолчанию нет, напр. glm-4.7-flash для Zhipu): "
+MSG[zh:ai_model_required_prompt]="填写模型名称（第三方接口没有默认模型，${C_YELLOW}必须填写${C_RESET}，例如智谱填 glm-4.7-flash）: "
+MSG[en:ai_model_required_prompt]="Enter the model name (${C_YELLOW}required${C_RESET} for third-party endpoints — there's no default, e.g. glm-4.7-flash for Zhipu): "
+MSG[ja:ai_model_required_prompt]="モデル名を入力してください（サードパーティ接続にはデフォルトがないため${C_YELLOW}必須です${C_RESET}。例：智譜なら glm-4.7-flash）: "
+MSG[de:ai_model_required_prompt]="Modellnamen eingeben (bei Drittanbieter-Endpunkten ${C_YELLOW}erforderlich${C_RESET}, es gibt keinen Standard, z. B. glm-4.7-flash für Zhipu): "
+MSG[ru:ai_model_required_prompt]="Введите название модели (${C_YELLOW}обязательно${C_RESET} для сторонних endpoint'ов — значения по умолчанию нет, напр. glm-4.7-flash для Zhipu): "
 
-MSG[zh:ai_model_required_empty_warn]="模型名称不能为空——第三方接口没有默认模型可用，留空会导致 AI 诊断在运行时直接报错。请重新输入: "
-MSG[en:ai_model_required_empty_warn]="Model name can't be empty — third-party endpoints have no default model, leaving it blank will make AI diagnosis fail at runtime. Please enter it again: "
-MSG[ja:ai_model_required_empty_warn]="モデル名は空にできません——サードパーティ接続にはデフォルトモデルがなく、空のままだとAI診断が実行時にエラーになります。もう一度入力してください: "
-MSG[de:ai_model_required_empty_warn]="Der Modellname darf nicht leer sein — Drittanbieter-Endpunkte haben kein Standardmodell, ein leeres Feld führt dazu, dass die KI-Diagnose zur Laufzeit fehlschlägt. Bitte erneut eingeben: "
-MSG[ru:ai_model_required_empty_warn]="Название модели не может быть пустым — у сторонних endpoint'ов нет модели по умолчанию, пустое поле приведёт к сбою ИИ-диагностики во время работы. Введите снова: "
+MSG[zh:ai_model_required_empty_warn]="${C_RED}模型名称不能为空——第三方接口没有默认模型可用，留空会导致 AI 诊断在运行时直接报错。请重新输入: ${C_RESET}"
+MSG[en:ai_model_required_empty_warn]="${C_RED}Model name can't be empty — third-party endpoints have no default model, leaving it blank will make AI diagnosis fail at runtime. Please enter it again: ${C_RESET}"
+MSG[ja:ai_model_required_empty_warn]="${C_RED}モデル名は空にできません——サードパーティ接続にはデフォルトモデルがなく、空のままだとAI診断が実行時にエラーになります。もう一度入力してください: ${C_RESET}"
+MSG[de:ai_model_required_empty_warn]="${C_RED}Der Modellname darf nicht leer sein — Drittanbieter-Endpunkte haben kein Standardmodell, ein leeres Feld führt dazu, dass die KI-Diagnose zur Laufzeit fehlschlägt. Bitte erneut eingeben: ${C_RESET}"
+MSG[ru:ai_model_required_empty_warn]="${C_RED}Название модели не может быть пустым — у сторонних endpoint'ов нет модели по умолчанию, пустое поле приведёт к сбою ИИ-диагностики во время работы. Введите снова: ${C_RESET}"
 
 MSG[zh:ai_trigger_prompt]="节点连续失败几次后触发一次诊断？[默认：3]: "
 MSG[en:ai_trigger_prompt]="Trigger a diagnosis after how many consecutive failures? [default: 3]: "
