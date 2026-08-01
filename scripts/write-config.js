@@ -152,6 +152,13 @@ const config = {
     provider: env('NN_AI_PROVIDER', 'anthropic'),
     apiKey: env('NN_AI_APIKEY', ''),
     model: env('NN_AI_MODEL', ''),
+    // 本轮补上（Addendum 8 bug#2的另一半根因）：此前就算install.sh问了baseUrl/
+    // apiPath（其实之前连问都没问），write-config.js这边也从来没把这两个字段
+    // 写进config.json——provider=openai-compatible但没有baseUrl，ai-provider.js
+    // 实际调用时就没有端点可用。留空字符串默认值，跟apiKey/model同一套约定，
+    // 不用说明性占位文字，避免||兜底逻辑失效。
+    baseUrl: env('NN_AI_BASEURL', ''),
+    apiPath: env('NN_AI_APIPATH', ''),
     triggerAfterFailures: envInt('NN_AI_TRIGGER_AFTER', 3),
     // 诊断正文和报错文本用哪种语言，默认跟随安装时选择的界面语言（NN_LANG），
     // 装完之后也可以直接改这个字段，不需要跟面板显示语言绑死。

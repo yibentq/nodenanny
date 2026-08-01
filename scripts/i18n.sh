@@ -85,6 +85,11 @@ ask() {
     printf '[non-interactive] %s = %s\n' "$1" "${__ask_ref:-<空>}" >&2
   else
     read -rp "$__ask_prompt" __ask_ref
+    # 本轮修复（Addendum 8 bug#1）：此前交互模式下直接按回车、不输入任何内容时，
+    # __ask_ref 会是空字符串，第三个参数指定的默认值从未被应用——跟非交互分支的
+    # 行为不一致，也跟提示文字里写的"[默认：xxx]"对不上。这里补上跟非交互分支
+    # 完全一致的空值回退逻辑，让"交互模式按回车"和"非交互模式不传值"最终效果相同。
+    if [ -z "${__ask_ref:-}" ]; then __ask_ref="$__ask_default"; fi
   fi
 }
 
@@ -119,6 +124,8 @@ ask_yn() {
     printf '[non-interactive] %s = %s\n' "$1" "${__asky_ref}" >&2
   else
     read -rp "$__asky_prompt" __asky_ref
+    # 本轮修复（Addendum 8 bug#1，同ask()）：交互模式按回车时补上默认值回退。
+    if [ -z "${__asky_ref:-}" ]; then __asky_ref="$__asky_default"; fi
   fi
 }
 
@@ -135,6 +142,8 @@ ask_yn_risky() {
     printf '[non-interactive] %s = %s\n' "$1" "${__askyr_ref}" >&2
   else
     read -rp "${C_RED}${__askyr_prompt}${C_RESET}" __askyr_ref
+    # 本轮修复（Addendum 8 bug#1，同ask()）：交互模式按回车时补上默认值回退。
+    if [ -z "${__askyr_ref:-}" ]; then __askyr_ref="$__askyr_default"; fi
   fi
 }
 
@@ -671,11 +680,36 @@ MSG[ja:ai_opt2]="  2) OpenAI（GPT）"
 MSG[de:ai_opt2]="  2) OpenAI (GPT)"
 MSG[ru:ai_opt2]="  2) OpenAI (GPT)"
 
+# 本轮新增（Addendum 8 bug#2修复）：第三方/自定义OpenAI兼容接口选项——代码里
+# ai-provider.js的diagnoseWithOpenAICompatible()早就支持这条路径（智谱/DeepSeek/
+# Moonshot等），但install.sh一直没有入口选它，导致选OpenAI的用户如果实际用的是
+# 第三方key，请求会打到真正的api.openai.com上，收到401。
+MSG[zh:ai_opt3]="  3) 第三方/自定义接口（OpenAI兼容，例如智谱GLM、DeepSeek等）"
+MSG[en:ai_opt3]="  3) Third-party / custom endpoint (OpenAI-compatible, e.g. Zhipu GLM, DeepSeek, etc.)"
+MSG[ja:ai_opt3]="  3) サードパーティ/カスタムエンドポイント（OpenAI互換、例：智譜GLM、DeepSeekなど）"
+MSG[de:ai_opt3]="  3) Drittanbieter / benutzerdefinierter Endpunkt (OpenAI-kompatibel, z. B. Zhipu GLM, DeepSeek usw.)"
+MSG[ru:ai_opt3]="  3) Сторонний / произвольный endpoint (OpenAI-совместимый, напр. Zhipu GLM, DeepSeek и т.д.)"
+
 MSG[zh:ai_provider_choose]="选一个 [默认：1]: "
 MSG[en:ai_provider_choose]="Choose one [default: 1]: "
 MSG[ja:ai_provider_choose]="選択してください [デフォルト: 1]: "
 MSG[de:ai_provider_choose]="Wähle eine Option [Standard: 1]: "
 MSG[ru:ai_provider_choose]="Выберите вариант [по умолчанию: 1]: "
+
+MSG[zh:ai_baseurl_prompt]="接口的域名是什么？（只填域名，不带 http(s):// 前缀，例如智谱填 open.bigmodel.cn）: "
+MSG[en:ai_baseurl_prompt]="What's the endpoint's domain? (hostname only, no http(s):// prefix, e.g. open.bigmodel.cn for Zhipu): "
+MSG[ja:ai_baseurl_prompt]="エンドポイントのドメインは？（ホスト名のみ、http(s)://は不要。例：智譜なら open.bigmodel.cn）: "
+MSG[de:ai_baseurl_prompt]="Wie lautet die Domain des Endpunkts? (nur Hostname, ohne http(s)://-Präfix, z. B. open.bigmodel.cn für Zhipu): "
+MSG[ru:ai_baseurl_prompt]="Каков домен эндпоинта? (только hostname, без http(s)://, напр. open.bigmodel.cn для Zhipu): "
+
+# apiPath默认走config.example.json里已经文档化的OpenAI标准路径/v1/chat/completions；
+# 不是每个第三方接口都用这个路径（智谱实测是/api/paas/v4/chat/completions），
+# 所以这里必须让用户自己确认，不能替他们悄悄假设一个可能是错的默认值。
+MSG[zh:ai_apipath_prompt]="接口路径是什么？不确定就直接回车，默认用 OpenAI 标准路径 /v1/chat/completions（部分第三方接口不一样，比如智谱是 /api/paas/v4/chat/completions，请去对应服务商文档确认）: "
+MSG[en:ai_apipath_prompt]="What's the API path? Press Enter to use the OpenAI-standard default /v1/chat/completions if unsure (some third-party providers differ — e.g. Zhipu uses /api/paas/v4/chat/completions — check your provider's docs): "
+MSG[ja:ai_apipath_prompt]="APIパスは？わからなければEnterでOpenAI標準の/v1/chat/completionsを使用します（一部のサードパーティは異なります。例：智譜は/api/paas/v4/chat/completions。提供元のドキュメントで確認してください）: "
+MSG[de:ai_apipath_prompt]="Wie lautet der API-Pfad? Bei Unsicherheit Enter drücken für den OpenAI-Standardpfad /v1/chat/completions (manche Drittanbieter weichen ab — z. B. Zhipu nutzt /api/paas/v4/chat/completions — bitte die Doku des Anbieters prüfen): "
+MSG[ru:ai_apipath_prompt]="Каков путь API? Если не уверены, нажмите Enter для стандартного OpenAI-пути /v1/chat/completions (у некоторых сторонних провайдеров он другой — напр. у Zhipu /api/paas/v4/chat/completions — уточните в документации провайдера): "
 
 MSG[zh:ai_apikey_prompt]="粘贴你的 API Key（输入时不显示，回车确认）: "
 MSG[en:ai_apikey_prompt]="Paste your API Key (hidden while typing, press Enter to confirm): "
@@ -688,6 +722,21 @@ MSG[en:ai_model_prompt]="Specify a model? (Anthropic default: claude-sonnet-4-6,
 MSG[ja:ai_model_prompt]="モデルを指定しますか？（Anthropicのデフォルト: claude-sonnet-4-6、OpenAIのデフォルト: gpt-4o-mini。わからなければEnterでデフォルトを使用）: "
 MSG[de:ai_model_prompt]="Ein bestimmtes Modell angeben? (Anthropic-Standard: claude-sonnet-4-6, OpenAI-Standard: gpt-4o-mini — Enter für Standard): "
 MSG[ru:ai_model_prompt]="Указать модель? (Anthropic по умолчанию: claude-sonnet-4-6, OpenAI по умолчанию: gpt-4o-mini — Enter для значения по умолчанию): "
+
+# 本轮新增：openai-compatible分支专用，跟上面ai_model_prompt不一样——那个可以
+# 直接回车走运行时兜底默认值，这个不行（ai-provider.js对这条路径没有默认模型名，
+# 留空会直接诊断失败），所以提示文字和校验逻辑都单独区分开，不能共用同一个key。
+MSG[zh:ai_model_required_prompt]="填写模型名称（第三方接口没有默认模型，必须填写，例如智谱填 glm-4.7-flash）: "
+MSG[en:ai_model_required_prompt]="Enter the model name (required for third-party endpoints — there's no default, e.g. glm-4.7-flash for Zhipu): "
+MSG[ja:ai_model_required_prompt]="モデル名を入力してください（サードパーティ接続にはデフォルトがないため必須です。例：智譜なら glm-4.7-flash）: "
+MSG[de:ai_model_required_prompt]="Modellnamen eingeben (bei Drittanbieter-Endpunkten erforderlich, es gibt keinen Standard, z. B. glm-4.7-flash für Zhipu): "
+MSG[ru:ai_model_required_prompt]="Введите название модели (обязательно для сторонних endpoint'ов — значения по умолчанию нет, напр. glm-4.7-flash для Zhipu): "
+
+MSG[zh:ai_model_required_empty_warn]="模型名称不能为空——第三方接口没有默认模型可用，留空会导致 AI 诊断在运行时直接报错。请重新输入: "
+MSG[en:ai_model_required_empty_warn]="Model name can't be empty — third-party endpoints have no default model, leaving it blank will make AI diagnosis fail at runtime. Please enter it again: "
+MSG[ja:ai_model_required_empty_warn]="モデル名は空にできません——サードパーティ接続にはデフォルトモデルがなく、空のままだとAI診断が実行時にエラーになります。もう一度入力してください: "
+MSG[de:ai_model_required_empty_warn]="Der Modellname darf nicht leer sein — Drittanbieter-Endpunkte haben kein Standardmodell, ein leeres Feld führt dazu, dass die KI-Diagnose zur Laufzeit fehlschlägt. Bitte erneut eingeben: "
+MSG[ru:ai_model_required_empty_warn]="Название модели не может быть пустым — у сторонних endpoint'ов нет модели по умолчанию, пустое поле приведёт к сбою ИИ-диагностики во время работы. Введите снова: "
 
 MSG[zh:ai_trigger_prompt]="节点连续失败几次后触发一次诊断？[默认：3]: "
 MSG[en:ai_trigger_prompt]="Trigger a diagnosis after how many consecutive failures? [default: 3]: "
@@ -915,11 +964,14 @@ MSG[ja:manual_source_explain]="これらはプロジェクト管理者本人が�
 MSG[de:manual_source_explain]="Das sind einige kostenlose Abo-Links, die von der Community geteilt und vom Projektbetreuer persönlich geprüft wurden (nicht dein eigener Server — ein von jemand anderem betriebenes kostenloses Proxy/Abo). Bei Aktivierung durchlaufen diese Quellen genau denselben Test-/Vertrauens-Zustandsautomaten wie von GitHub entdeckte Quellen — eingebaut zu sein verleiht kein dauerhaftes Vertrauen; sie müssen die Prüfung bestehen und sich das Vertrauen anhand der tatsächlichen Erfolgsquote verdienen, und werden bei anhaltendem Versagen automatisch herabgestuft/gesperrt. Verfügbarkeit und Vertrauenswürdigkeit dieser kostenlosen Quellen können nicht vollständig garantiert werden — sie sind nur ergänzende Kandidaten für den Pool, nicht etwas, worauf man sich langfristig verlassen sollte. Wenn du das überspringst, bleibt der Pool trotzdem voll nutzbar; du kannst Quellen später jederzeit über pool.manualSources in config.json hinzufügen."
 MSG[ru:manual_source_explain]="Это несколько бесплатных ссылок на подписки, которыми поделилось сообщество и которые лично проверил разработчик проекта (это не ваш собственный сервер, а чей-то чужой бесплатный прокси/подписка). При включении эти источники проходят точно такой же испытательный период / систему доверия, что и источники, найденные через GitHub — то, что источник встроенный, не даёт постоянного доверия; ему всё равно нужно пройти проверку и заслужить доверие на основе реального процента успешных проверок, а при постоянных сбоях он автоматически понижается/блокируется. Доступность и надёжность этих бесплатных источников нельзя полностью гарантировать — это лишь дополнительные кандидаты для пула, не то, на что стоит полагаться долгосрочно. Если пропустить этот шаг, пул всё равно будет полностью рабочим; источники можно добавить позже через pool.manualSources в config.json."
 
-MSG[zh:manual_source_ask]="要现在启用这几条手动种子来源吗？[y/N]: "
-MSG[en:manual_source_ask]="Enable these manual seed sources now? [y/N]: "
-MSG[ja:manual_source_ask]="今、この手動シードソースを有効にしますか？[y/N]: "
-MSG[de:manual_source_ask]="Diese manuellen Seed-Quellen jetzt aktivieren? [y/N]: "
-MSG[ru:manual_source_ask]="Включить эти ручные исходные источники сейчас? [y/N]: "
+# 本轮修复：文字之前是[y/N]，但install.sh里ask_yn传的第三个参数一直是"Y"——
+# 文字和代码实际默认值本来就对不上，这里改成[Y/n]让文字如实反映真正的默认行为
+# （founder本轮也确认了希望这条默认开启，跟代码原意一致）。
+MSG[zh:manual_source_ask]="要现在启用这几条手动种子来源吗？[Y/n]: "
+MSG[en:manual_source_ask]="Enable these manual seed sources now? [Y/n]: "
+MSG[ja:manual_source_ask]="今、この手動シードソースを有効にしますか？[Y/n]: "
+MSG[de:manual_source_ask]="Diese manuellen Seed-Quellen jetzt aktivieren? [Y/n]: "
+MSG[ru:manual_source_ask]="Включить эти ручные исходные источники сейчас? [Y/n]: "
 
 MSG[zh:manual_source_already_enabled]="检测到手动种子来源此前已经配置过，跳过重复询问。"
 MSG[en:manual_source_already_enabled]="Manual seed sources were already configured previously — skipping the question."
@@ -952,11 +1004,15 @@ MSG[ja:terminal_explain]="パネルにはブラウザから直接サーバーに
 MSG[de:terminal_explain]="Das Panel enthält ein browserbasiertes Terminal, mit dem du Befehle auf dem Server ausführen kannst, ohne einen SSH-Client zu benötigen. Wenn aktiviert, muss vor dem Öffnen zusätzlich zum Panel-Login-Passwort ein hier festgelegtes Passwort eingegeben werden — eine zusätzliche Schutzschicht. Bei Unsicherheit wähle \"Nein\" — du kannst es später jederzeit durch Bearbeiten der Konfigurationsdatei aktivieren."
 MSG[ru:terminal_explain]="В панели есть веб-терминал, позволяющий выполнять команды на сервере прямо из браузера, без SSH-клиента. При включении перед открытием терминала потребуется отдельно ввести пароль, заданный здесь (в дополнение к паролю входа в панель) — как дополнительный уровень защиты. Если не уверены, выберите «Нет» — включить можно в любой момент позже, отредактировав файл конфигурации."
 
-MSG[zh:terminal_ask]="要不要现在开启在线终端功能？[y/N]: "
-MSG[en:terminal_ask]="Enable the online terminal now? [y/N]: "
-MSG[ja:terminal_ask]="今すぐオンラインターミナルを有効にしますか？ [y/N]: "
-MSG[de:terminal_ask]="Online-Terminal jetzt aktivieren? [y/N]: "
-MSG[ru:terminal_ask]="Включить онлайн-терминал сейчас? [y/N]: "
+# 本轮修改（founder本轮要求的默认值变更）：从默认关闭改成默认开启。注意——
+# 这只是改了"按回车时选哪个"，并没有削弱密码强制要求：install.sh里紧跟着的
+# ask_secret NN_TERMINAL_PASSWORD逻辑不变，密码留空时仍然不会写enabled:true，
+# 不会出现"默认开了终端但没有密码保护"的情况。
+MSG[zh:terminal_ask]="要不要现在开启在线终端功能？[Y/n]: "
+MSG[en:terminal_ask]="Enable the online terminal now? [Y/n]: "
+MSG[ja:terminal_ask]="今すぐオンラインターミナルを有効にしますか？ [Y/n]: "
+MSG[de:terminal_ask]="Online-Terminal jetzt aktivieren? [Y/n]: "
+MSG[ru:terminal_ask]="Включить онлайн-терминал сейчас? [Y/n]: "
 
 MSG[zh:terminal_password_prompt]="请设置终端解锁密码（跟面板登录密码可以设成一样，方便记；输入时不会显示）: "
 MSG[en:terminal_password_prompt]="Set an unlock password for the terminal (can be the same as your panel password, for convenience; input is hidden): "

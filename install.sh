@@ -530,17 +530,49 @@ if [ ! -f "$INSTALL_DIR/config/config.json" ]; then
     export NN_AI_ENABLED=true
     m ai_opt1
     m ai_opt2
+    m ai_opt3
     ask NN_AI_PROVIDER_CHOICE "$(m ai_provider_choose)" "1"
     case "$NN_AI_PROVIDER_CHOICE" in
       2) export NN_AI_PROVIDER="openai" ;;
+      3) export NN_AI_PROVIDER="openai-compatible" ;;
       *) export NN_AI_PROVIDER="anthropic" ;;
     esac
     ask_secret NN_AI_APIKEY "$(m ai_apikey_prompt)" ""
     export NN_AI_APIKEY
-    ask NN_AI_MODEL "$(m ai_model_prompt)" ""
-    export NN_AI_MODEL
-    ask NN_AI_TRIGGER_AFTER "$(m ai_trigger_prompt)" "3"
-    export NN_AI_TRIGGER_AFTER="${NN_AI_TRIGGER_AFTER:-3}"
+    # 本轮新增（Addendum 8 bug#2修复）：只有选了第三方/OpenAI兼容接口才需要问
+    # baseUrl/apiPath——anthropic/openai这两条官方路径代码里本来就是硬编码好的
+    # 域名，不需要用户填。
+    export NN_AI_BASEURL=""
+    export NN_AI_APIPATH=""
+    if [ "$NN_AI_PROVIDER" = "openai-compatible" ]; then
+      ask NN_AI_BASEURL "$(m ai_baseurl_prompt)" ""
+      export NN_AI_BASEURL
+      ask NN_AI_APIPATH "$(m ai_apipath_prompt)" ""
+      export NN_AI_APIPATH
+      # model在这条路径下必须非空（ai-provider.js对openai-compatible没有默认模型名，
+      # 留空会在真正诊断时才报错，而不是装机时就发现）——这里用循环强制填，
+      # 不像anthropic/openai分支的ai_model_prompt那样可以直接回车走运行时兜底默认值。
+      while true; do
+        ask NN_AI_MODEL "$(m ai_model_required_prompt)" ""
+        if [ -n "${NN_AI_MODEL:-}" ]; then
+          break
+        fi
+        if [ "$NN_NONINTERACTIVE" = "true" ]; then
+          # 非交互模式没法真的再问一遍人——打印醒目警告后继续，跟项目里其它
+          # "宁可不阻断整个安装流程"的校验失败处理原则一致，而不是死循环卡住。
+          echo "[nodenanny] 警告：AI供应商选择了第三方/OpenAI兼容接口（openai-compatible），但 NN_AI_MODEL 没有从环境变量拿到值。这个供应商没有默认模型名，config.json里model字段会先写成空——AI诊断功能实际不会生效，装完后记得手动补上模型名（例如智谱的 glm-4.7-flash）再重启 nodenanny-panel。" >&2
+          break
+        fi
+        m ai_model_required_empty_warn
+      done
+      export NN_AI_MODEL
+    else
+      ask NN_AI_MODEL "$(m ai_model_prompt)" ""
+      export NN_AI_MODEL
+    fi
+    # 本轮修改（founder本轮要求的UX变更）：不再问触发阈值这道题——对非技术用户
+    # 来说这个数字意义不大，直接静默用默认值3，不占用一轮问答。
+    export NN_AI_TRIGGER_AFTER="3"
     m ai_enabled_note
     if [ "$NN_NONINTERACTIVE" = "true" ] && [ -z "$NN_AI_APIKEY" ]; then
       echo "[nodenanny] 提示：AI诊断已选择启用，但 NN_AI_APIKEY 没有从环境变量拿到值——config.json里会先写成空key，AI诊断这个功能实际不会生效，装完后记得手动补上API Key再重启 nodenanny-panel。" >&2
@@ -774,7 +806,7 @@ else
   echo ""
   m terminal_title
   m terminal_explain
-  ask_yn NN_TERMINAL_CHOICE "$(m terminal_ask)" "N"
+  ask_yn NN_TERMINAL_CHOICE "$(m terminal_ask)" "Y"
   if [[ "$NN_TERMINAL_CHOICE" =~ ^[Yy]$ ]]; then
     ask_secret NN_TERMINAL_PASSWORD "$(m terminal_password_prompt)" ""
     if [ -n "${NN_TERMINAL_PASSWORD:-}" ]; then
