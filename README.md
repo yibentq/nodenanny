@@ -135,6 +135,13 @@ The generated access URL is printed in the terminal and also saved to `PANEL_ACC
 
 You can log out (there's a logout button in the bottom-right corner of the panel); next visit will ask for the password again.
 
+## Online Terminal (Optional)
+
+The panel can host a browser-based terminal so you can run commands on the server without opening a separate SSH window — handy for a quick peek at logs or a quick process restart; for regular maintenance, a real terminal is still the better tool.
+
+- `install.sh` asks whether to enable this. If you say yes, it asks you to set a separate terminal password (independent from the panel login password) — it asks you to type it **twice** to catch typos, and re-prompts if the two don't match, so you don't end up locked out later without knowing why.
+- **If you configured Nginx yourself** (rather than letting `install.sh` do it automatically), make sure your reverse-proxy config includes the three WebSocket-upgrade lines (`proxy_http_version 1.1;` / `proxy_set_header Upgrade $http_upgrade;` / `proxy_set_header Connection "upgrade";` — see `deploy/nginx-nodenanny.conf.example`). Without them, the terminal behaves as "password verifies fine, then disconnects the instant it unlocks" — that's not the terminal feature itself being broken, it's the proxy never actually upgrading the connection to a WebSocket.
+
 ## Backup Node Pool (Optional Emergency Fallback)
 
 **This is not a core feature — think of it as an airbag.** It's off by default. If your node goes down, NodeNanny temporarily borrows a node scraped from open, public sources so your client isn't left completely disconnected; once your own node recovers, it switches back automatically and the pool goes idle again.
@@ -191,6 +198,30 @@ If you've found a free-node subscription you trust (say, one shared and actively
 - `id` can be any unique string; restart the pool process (`pm2 restart nodenanny-pool`) after editing config for it to take effect.
 - **Important**: sources added this way go through the exact same trial/trust state machine as GitHub-discovered sources — adding one here does not grant permanent trust. Even though you've personally vetted it, we still have no way to verify who actually runs it or whether it might turn bad later, so its first-round weight is capped low just like any newly discovered source, and it earns more weight only through a sustained real pass rate. If it ever starts producing anomalous data (e.g. a batch of "different" nodes sharing identical credentials — a honeypot signature), it gets auto-demoted/blacklisted the same as any other source, with no special treatment just because you added it manually.
 - These tend to be fresher and higher quality than randomly discovered GitHub repos (someone is actively curating them), but the risk is the same as with any stranger's node: technical checks can confirm "it connects and the content isn't tampered with," not "the operator isn't logging your traffic metadata" — the panel will still honestly label it as an unknown server.
+
+### Telegram channel sources
+
+The `url` field in `manualSources` can also point directly at a Telegram channel (`https://t.me/channel-name`) instead of a fixed subscription link — many free-node channels post a fresh subscription link (with a rotating membership token) every day rather than one that stays constant. NodeNanny will fetch the channel's public preview page, find the most recent message containing a subscription link, and resolve it to today's real link automatically — you don't need to update the config by hand.
+
+```json
+"manualSources": [
+  { "id": "some-channel", "name": "Some Channel", "url": "https://t.me/channel-name" }
+]
+```
+
+- Trust is tracked by the **domain** the resolved link points to, not by the channel itself — since the same channel posts a different tokened link every day, tracking by domain lets trial-period progress accumulate instead of resetting to zero daily.
+- If a channel also pastes raw node links (`vless://`, `vmess://`, etc.) directly in its message text, those get collected too and pooled into a separate shared source called `telegram-raw-pool`, which goes through the same trial process as everything else — nothing gets trusted without being checked.
+
+### Official source list sync (optional)
+
+Besides adding sources one by one yourself, the NodeNanny project maintains a small, lightly-curated public list of candidate sources at `data/source-list.json` (currently a handful of consistently-updated Telegram channels). Once enabled, the panel's "Source List Sync" section lets you check for updates, preview the diff, and merge new entries into your own `manualSources` with one click — anything merged in still goes through the normal trial period, it doesn't get automatic trust. `install.sh` asks whether to turn this on during the same content-sync question as `kbSync`/`wikiSync`; a server already running needs a manual `sourceListSync` field added to `config.json` plus an `nodenanny-panel` restart to pick it up.
+
+### Manually switch to the backup pool (human-triggered)
+
+Besides the fully automatic "switch to pool when your node fails, switch back when it recovers" behavior above, the panel also has a manual toggle to switch to the backup pool right now, on your own call — for example if you know you're about to reinstall or reboot your own node and want to avoid a gap.
+
+- Once toggled on, it will **not** automatically switch back even if your own node checks out fine in the meantime — you have to turn it off yourself. This avoids the pool being silently switched back while you had a specific reason for switching it manually.
+- If the backup pool is currently empty (no nodes have passed checks), the toggle will simply fail rather than switching to an empty pool.
 
 ## AI Failure Diagnosis (Optional)
 

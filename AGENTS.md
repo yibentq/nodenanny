@@ -99,18 +99,139 @@ write real secrets into this file, into a commit, or into any handoff/chat docum
 - `core/telegram-fetch.js`'s `document_attachment` path is confirmed
   non-functional: Telegram's public, login-free preview page (`t.me/s/<channel>`)
   exposes only a message permalink for file attachments, not a real download URL.
-  This was live-verified against a real channel, not assumed. Only the
-  `message_text_link` path (plain links pasted in message text) is viable, and even
-  that has not been live-verified against a real channel end to end. Do not attempt
+  This was live-verified against a real channel, not assumed. Do not attempt
   to fix `document_attachment` without the maintainer explicitly approving new
   credentials (a bot added as channel admin by the channel owner, or a full MTProto
   user login) — both are out of scope until then, and for a third-party channel the
   maintainer doesn't own, bot-admin access usually isn't obtainable at all.
+- `message_text_link` (plain-text links) and `message_text_code_link` (links inside
+  a `<code>`/`<pre>` block) are both live-verified working sub-paths. Code/pre-block
+  links take priority over plain-text `<a href>` links across the whole scanned
+  message window — real channels in this genre consistently paste the actual
+  subscription link in a code block for easy mobile copy/paste, while plain-text
+  links in the same messages are more often unrelated promotional content. `t.me`/
+  `telegram.me` links and any candidate URL containing `@` (userinfo@host — this
+  matches individual raw node URIs like `vless://uuid@host:port` sometimes pasted
+  with an `https://` typo prefix, not real subscription API URLs) are excluded as
+  candidates.
+- `telegramFetch.extractRawNodeLinks()` separately harvests raw node URIs
+  (`vless/vmess/ss/trojan/hysteria2/hy2/hysteria/tuic/anytls/socks5://`, no `ssr`)
+  pasted directly in a channel's message text — this is independent of whether a
+  subscription link was found on the same fetch. `fetchLatestFileUrl()` returns
+  `rawHtml` on every path (success or failure) precisely so callers can harvest
+  these without a second network request.
+- **Trust identity for Telegram-resolved subscription links is domain-based, not
+  channel-based.** `core/pool.js`'s `fetchFromManualSource()` uses a `trustSourceId`
+  (`manual-tg-sub:<hostname>`) that is separate from the display `sourceId`
+  (`manual:<channel-id>`, still used for panel roster/star-map/pool-events display
+  and for `passedNodes[].sourceId`). This exists because these subscription links
+  carry per-request/per-day rotating tokens — using the full URL as trust identity
+  would mean trial progress resets constantly and 7-round promotion could never
+  complete. **Anomaly detection is computed and logged as normal but does *not* feed
+  into blacklisting for `manual-tg-sub:*` identities** (`anomalyForTrust` is forced
+  `false` for this namespace only) — a legitimate multi-region subscription service
+  showing the same account identity on multiple servers is expected behavior, not
+  fraud. Non-Telegram manual sources (`trustSourceId` still `manual:<id>`) are
+  unaffected — anomaly detection blacklists them normally. **This anomaly-suppression
+  default was an AI judgment call during the redesign, not something the maintainer
+  has explicitly signed off on** — he was asked and said he doesn't understand the
+  mechanism well enough to have an opinion yet, so treat it as "current behavior,
+  revisit if it ever causes a real problem or he raises it," not as settled product
+  policy.
+- Raw nodes harvested across *all* Telegram-channel manual sources in one refresh
+  round are pooled together into a single shared source, `telegram-raw-pool`
+  (constant `TELEGRAM_RAW_POOL_SOURCE_ID` in `core/pool.js`) — deliberately **not**
+  merged into `aggregator-default` (confirmed useless, consistently 0 passes) and
+  deliberately **not** given a fixed/configurable weight override — it goes through
+  the normal trial→trusted→blacklisted state machine like any other non-fixed
+  source. Anomaly detection is *not* suppressed for this pool (unlike the
+  `manual-tg-sub:*` case above) — raw nodes pasted by different channels colliding
+  on identity doesn't have the same "legitimate multi-region service" justification.
+- `parseSubscriptionContent()` (`core/repo-fetch.js`) reports `format: 'unrecognized'`
+  whenever zero usable links come out the other end — **including** when the input
+  actually is valid Clash YAML but every proxy entry uses an unsupported protocol
+  (e.g. all-SSR). Seeing `unrecognized` in logs for a Telegram/GitHub source does not
+  by itself mean the parser failed to recognize the format; check `yamlTotal` vs
+  `yamlConverted` (when present) or inspect the raw content before assuming a parser
+  bug.
+- `core/clash-yaml.js`'s `extractProxiesBlockLines()` supports **both** YAML list
+  styles for the `proxies:` block — the conventional indented-dash style
+  (`proxies:\n  - name: ...`) and the equally-valid flush-left style
+  (`proxies:\n- name: ...`, list items at the *same* indentation as the key). It
+  derives the list's actual indentation from the first item found rather than
+  assuming a fixed relationship to the `proxies:` key's own indentation. If this
+  ever needs touching again, don't reintroduce the fixed-relationship assumption —
+  it silently produces an empty block (and therefore `format: 'unrecognized'`) for
+  any flush-left file, which is common among real channels tested (clashv8,
+  wxdy666).
+- `core/repo-fetch.js`'s `fetchText()` has a fallback path for
+  `UND_ERR_HEADERS_OVERFLOW` (Node's default header-size ceiling, hit when a 3xx
+  redirect's `Location` header is itself huge — some subscription services encode
+  the entire node list into the redirect target URL rather than a normal response
+  body). On that specific error it retries via Node's built-in `http`/`https` module
+  with a raised `maxHeaderSize`, manually following redirects (Node's built-in
+  modules don't auto-follow them the way `fetch()`/`curl -L` do). This is a narrow,
+  specific fallback for one known failure mode — don't broaden it into a blanket
+  catch-and-retry for other error types.
+- **Panel's online terminal requires a WebSocket-upgrade-aware reverse proxy.**
+  `scripts/setup-reverse-proxy.sh`'s generated Nginx config must include
+  `proxy_http_version 1.1;`, `proxy_set_header Upgrade $http_upgrade;`, and
+  `proxy_set_header Connection "upgrade";` on the panel's `location /` block —
+  without these, the terminal connects (auth succeeds) and then closes immediately,
+  because Nginx never actually upgrades the connection to a WebSocket. If a
+  maintainer reports "terminal unlocks then disconnects instantly," check the
+  reverse-proxy config for these three lines before suspecting `core/terminal.js`
+  itself.
+- `public/wiki.html`'s internal-link resolver must strip the numeric order-prefix
+  (e.g. `04-` in `04-compliance-and-risk`) from a cross-category relative link's
+  category segment before matching — the backend's `categoryId` never includes this
+  prefix (see `stripOrderPrefix` in `core/wiki-manager.js`). Same-category links
+  (`./slug`) don't hit this path and worked before the fix; only cross-category
+  links (`../<numbered-category>/slug`) were affected.
+- `core/source-list-sync.js` (config field `sourceListSync.owner/repo/ref/path`,
+  panel section "节点来源列表同步") deliberately strips any `fixed` field from
+  remote-supplied entries regardless of what the remote JSON contains — every
+  source it merges in enters the normal trial state machine, mirroring the
+  "auto-fetched sources don't get `fixed: true`" invariant above. It is now offered
+  in `install.sh`'s interactive content-sync bundle alongside `kbSync`/`wikiSync`
+  (installed configs get all three pointed at the maintainer's own repo by default);
+  fresh installs are covered, but this does **not** retroactively populate
+  `sourceListSync` on an already-running server's `config.json` — that still needs a
+  manual edit + `nodenanny-panel` restart, same as `kbSync`/`wikiSync`'s equivalent
+  gap.
+- `panel-server.js`'s `config` object (including `sourceListSync`/`kbSync`/
+  `wikiSync`/general settings) is loaded **once** at process startup into a closure
+  variable, **not** re-read per request. Any `config.json` edit intended to affect
+  panel behavior requires an `nodenanny-panel` restart to take effect — this is not
+  specific to `sourceListSync`, it's how the whole file is loaded.
+- Terminal-password setup (`ask_secret` in `scripts/i18n.sh`, used by `install.sh`)
+  now asks twice and retry-loops on mismatch before accepting — a typo during setup
+  used to go completely undetected until the maintainer tried to actually use the
+  terminal later and got locked out without knowing why.
 - `install.sh` supports non-interactive mode (`NN_NONINTERACTIVE=true`, or
   automatically when stdin isn't a tty) plus per-field `NN_*` environment variables
   (see `scripts/i18n.sh`'s `ask`/`ask_secret`/`ask_yn` helpers). `NN_PANEL_PASSWORD`
   is mandatory in non-interactive mode — the script exits non-zero if it's unset or
   empty. This is intentional; do not relax it.
+
+- Manual backup-pool switch (`state.poolManualOverride` in `core/store.js`, endpoint
+  `POST /api/pool/manual-toggle` in `core/panel-server.js`) is a human-triggered
+  override, not automatic failover — when active, `core/checker.js`'s normal
+  pool→self auto-revert-on-recovery is suppressed until the maintainer manually
+  toggles back. Blocks (400 `pool_empty`) rather than allowing an empty-pool switch.
+  This is a deliberately separate mechanism from the trial/trusted/blacklisted
+  source-trust state machine above — don't conflate the two.
+- `install.sh`'s AI-provider setup supports a third option, `openai-compatible`
+  (any OpenAI-compatible third-party endpoint — the maintainer's real diagnosis
+  provider, Zhipu/GLM, is configured this way: `baseUrl: "open.bigmodel.cn"`,
+  `apiPath: "/api/paas/v4/chat/completions"` — note this is **not** the
+  OpenAI-standard default path, don't assume a third-party provider uses
+  `/v1/chat/completions` without checking its docs). Unlike `anthropic`/`openai`
+  (which have runtime fallback model defaults in `core/ai-provider.js`,
+  `claude-sonnet-4-6`/`gpt-4o-mini`), `openai-compatible` has no universal default
+  model and `diagnoseWithOpenAICompatible()` throws if `model` is empty — the
+  installer enforces a non-empty answer for this path specifically (interactive
+  mode retry-loops; non-interactive mode warns loudly to stderr rather than hanging).
 
 ## Permanently out of scope
 
