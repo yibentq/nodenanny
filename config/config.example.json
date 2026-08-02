@@ -100,6 +100,10 @@
     "path": "data/wiki",
     "_comment": "Wiki百科内容的远程同步源，owner/repo指向创始人维护的公开GitHub仓库，path是该仓库里对应data/wiki/的目录路径。owner或repo留空则同步功能不可用，只能手动维护本地data/wiki/。跟kbSync不同：这里是直接覆盖式镜像同步（面板上点检查更新->看diff->点确认覆盖，就会整体覆盖本地data/wiki/），不做本地修改保留，这是创始人明确确认过的方案。"
   },
+  "sourceListSync": {
+    "rawUrl": "",
+    "_comment": "节点来源候选列表的远程同步源，指向GitHub仓库里source-list.json的raw地址（跟kbSync的rawUrl是同一种用法，但内容和用途完全不同——这个是候选节点来源列表，不是知识库）。留空则同步功能不可用，只能手动维护本地data/source-list.json。同步进来的来源会走正常的trial/trusted/blacklisted状态机验证，不会获得fixed:true的无条件信任。"
+  },
   "smtp": {
     "host": "smtp.example.com",
     "port": 465,

@@ -738,11 +738,6 @@ MSG[ja:ai_model_required_empty_warn]="${C_RED}モデル名は空にできませ�
 MSG[de:ai_model_required_empty_warn]="${C_RED}Der Modellname darf nicht leer sein — Drittanbieter-Endpunkte haben kein Standardmodell, ein leeres Feld führt dazu, dass die KI-Diagnose zur Laufzeit fehlschlägt. Bitte erneut eingeben: ${C_RESET}"
 MSG[ru:ai_model_required_empty_warn]="${C_RED}Название модели не может быть пустым — у сторонних endpoint'ов нет модели по умолчанию, пустое поле приведёт к сбою ИИ-диагностики во время работы. Введите снова: ${C_RESET}"
 
-MSG[zh:ai_trigger_prompt]="节点连续失败几次后触发一次诊断？[默认：3]: "
-MSG[en:ai_trigger_prompt]="Trigger a diagnosis after how many consecutive failures? [default: 3]: "
-MSG[ja:ai_trigger_prompt]="何回連続で失敗したら診断を実行しますか？[デフォルト: 3]: "
-MSG[de:ai_trigger_prompt]="Nach wie vielen aufeinanderfolgenden Fehlschlägen soll eine Diagnose ausgelöst werden? [Standard: 3]: "
-MSG[ru:ai_trigger_prompt]="После скольких подряд неудачных проверок запускать диагностику? [по умолчанию: 3]: "
 
 MSG[zh:ai_enabled_note]="AI 故障诊断已启用。诊断内容和报错都会用你刚才选择的界面语言生成，想改的话去 config.json 里的 ai.language 字段调整。"
 MSG[en:ai_enabled_note]="AI diagnosis is enabled. Diagnosis text and error messages will be generated in the interface language you just chose — change this later via the ai.language field in config.json."
@@ -1025,6 +1020,18 @@ MSG[en:terminal_already_enabled]="The online terminal is already enabled — ski
 MSG[ja:terminal_already_enabled]="オンラインターミナルはすでに有効になっています。このステップをスキップします。"
 MSG[de:terminal_already_enabled]="Das Online-Terminal ist bereits aktiviert — dieser Schritt wird übersprungen."
 MSG[ru:terminal_already_enabled]="Онлайн-терминал уже включён — этот шаг пропускается."
+
+MSG[zh:terminal_password_confirm_prompt]="请再输入一遍刚才的密码，确认没打错（输入时不会显示）: "
+MSG[en:terminal_password_confirm_prompt]="Enter the same password again to confirm there's no typo (input is hidden): "
+MSG[ja:terminal_password_confirm_prompt]="打ち間違いがないか確認するため、もう一度同じパスワードを入力してください（入力内容は表示されません）: "
+MSG[de:terminal_password_confirm_prompt]="Gib das Passwort zur Bestätigung erneut ein, um Tippfehler auszuschließen (die Eingabe wird nicht angezeigt): "
+MSG[ru:terminal_password_confirm_prompt]="Введите тот же пароль ещё раз для подтверждения, что не было опечатки (ввод не отображается): "
+
+MSG[zh:terminal_password_mismatch_warn]="${C_RED}两次输入的密码不一样，请重新设置。${C_RESET}"
+MSG[en:terminal_password_mismatch_warn]="${C_RED}The two passwords didn't match. Please set it again.${C_RESET}"
+MSG[ja:terminal_password_mismatch_warn]="${C_RED}2回入力したパスワードが一致しません。もう一度設定してください。${C_RESET}"
+MSG[de:terminal_password_mismatch_warn]="${C_RED}Die beiden Passwörter stimmen nicht überein. Bitte erneut festlegen.${C_RESET}"
+MSG[ru:terminal_password_mismatch_warn]="${C_RED}Введённые пароли не совпадают. Пожалуйста, задайте пароль ещё раз.${C_RESET}"
 
 MSG[zh:terminal_enabled_note]="已开启在线终端，密码已写入配置。"
 MSG[en:terminal_enabled_note]="Online terminal enabled; the password has been written to the config."

@@ -809,6 +809,23 @@ else
   ask_yn NN_TERMINAL_CHOICE "$(m terminal_ask)" "Y"
   if [[ "$NN_TERMINAL_CHOICE" =~ ^[Yy]$ ]]; then
     ask_secret NN_TERMINAL_PASSWORD "$(m terminal_password_prompt)" ""
+    if [ -n "${NN_TERMINAL_PASSWORD:-}" ] && [ "$NN_NONINTERACTIVE" != "true" ]; then
+      # 密码输入不回显，打错了自己也看不出来——这里加一次确认输入，跟前面AI供应商
+      # 必填model字段用的是同一个思路（循环+不匹配就重新问），避免创始人事后才发现
+      # 密码设错、把自己锁在终端外面。非交互模式没有人能重新输入，跳过这个循环。
+      while true; do
+        NN_TERMINAL_PASSWORD_CONFIRM=""
+        ask_secret NN_TERMINAL_PASSWORD_CONFIRM "$(m terminal_password_confirm_prompt)" ""
+        if [ "$NN_TERMINAL_PASSWORD_CONFIRM" = "$NN_TERMINAL_PASSWORD" ]; then
+          break
+        fi
+        m terminal_password_mismatch_warn
+        ask_secret NN_TERMINAL_PASSWORD "$(m terminal_password_prompt)" ""
+        if [ -z "${NN_TERMINAL_PASSWORD:-}" ]; then
+          break
+        fi
+      done
+    fi
     if [ -n "${NN_TERMINAL_PASSWORD:-}" ]; then
       # 密码内容不可控，用环境变量传给node -e，不在shell里拼进JS字符串
       # （原因跟write-config.js顶部注释一致：内容带引号/反斜杠会拼坏JSON）。
@@ -830,13 +847,15 @@ else
   fi
 fi
 
-# ---------- 5f. 内容同步来源（本轮新增，修复真实缺口：kbSync/wikiSync这两个
-# 同步功能面板和代码都已经做好了，但write-config.js从来没写过这两个字段，
-# install.sh也从来没问过——config.example.json里默认是空，导致这两个已经做好的
-# 功能新装的服务器永远用不上。这两个字段指向的是NodeNanny官方仓库本身的公开内容
-# （data/knowledge-base.json、data/wiki/），不涉及任何密钥，所以不用像终端密码
-# 那样单独问用户填owner/repo——默认直接指向官方仓库，只问一句"要不要用"即可，
-# fork了自己维护内容的人选"否"，以后自己去config.json改成自己的仓库。----------
+# ---------- 5f. 内容同步来源（修复真实缺口：kbSync/wikiSync/sourceListSync这三个
+# 同步功能面板和代码都已经做好了，但write-config.js从来没写过这些字段，
+# install.sh也从来没问过——config.example.json里默认是空，导致这些已经做好的
+# 功能新装的服务器永远用不上。这三个字段指向的是NodeNanny官方仓库本身的公开内容
+# （data/knowledge-base.json、data/wiki/、data/source-list.json），不涉及任何密钥，
+# 所以不用像终端密码那样单独问用户填owner/repo——默认直接指向官方仓库，只问一句
+# "要不要用"即可，fork了自己维护内容的人选"否"，以后自己去config.json改成自己的仓库。
+# sourceListSync是本轮补上的第三个（此前只有kbSync/wikiSync被这一步覆盖，见Addendum 7/8的
+# 遗留事项）。----------
 KBSYNC_SET="$(node -e "
   try {
     const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
@@ -849,7 +868,13 @@ WIKISYNC_SET="$(node -e "
     console.log((c.wikiSync && c.wikiSync.owner && c.wikiSync.repo) ? 'true' : 'false');
   } catch (e) { console.log('false'); }
 ")"
-if [ "$KBSYNC_SET" = "true" ] && [ "$WIKISYNC_SET" = "true" ]; then
+SOURCELISTSYNC_SET="$(node -e "
+  try {
+    const c = JSON.parse(require('fs').readFileSync('$INSTALL_DIR/config/config.json', 'utf-8'));
+    console.log((c.sourceListSync && c.sourceListSync.rawUrl) ? 'true' : 'false');
+  } catch (e) { console.log('false'); }
+")"
+if [ "$KBSYNC_SET" = "true" ] && [ "$WIKISYNC_SET" = "true" ] && [ "$SOURCELISTSYNC_SET" = "true" ]; then
   m sync_already_enabled
 else
   echo ""
@@ -868,6 +893,8 @@ else
       c.wikiSync.repo='nodenanny';
       c.wikiSync.ref=c.wikiSync.ref||'main';
       c.wikiSync.path=c.wikiSync.path||'data/wiki';
+      c.sourceListSync=c.sourceListSync||{};
+      c.sourceListSync.rawUrl='https://raw.githubusercontent.com/yibentq/nodenanny/main/data/source-list.json';
       fs.writeFileSync(p, JSON.stringify(c,null,2));
     "
     m sync_enabled_note
