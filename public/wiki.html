@@ -914,7 +914,11 @@ const WIKI_I18N = {
       const rest = path.slice(3);
       const parts = rest.split('/').filter(Boolean);
       if (parts.length >= 2) {
-        return { categoryId: parts[0], slug: parts.slice(1).join('/') };
+        // wiki正文里的跨分类链接习惯写成 "../04-compliance-and-risk/xxx"（带文件夹的数字
+        // 排序前缀），但后端 categoryId 永远是去掉数字前缀之后的（见 wiki-manager.js 里
+        // stripOrderPrefix 的注释）。这里必须做同样的去前缀处理，否则这类链接会404。
+        const categoryId = parts[0].replace(/^\d+-/, '');
+        return { categoryId, slug: parts.slice(1).join('/') };
       }
       return null;
     }
