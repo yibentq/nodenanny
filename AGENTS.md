@@ -55,7 +55,14 @@ drifted out of sync before.
 - **Experimental**: `186.244.208.32` — the live, working deployment.
   `ssh root@186.244.208.32:22`. Code lives at `/root/nodenanny`, deployed via `scp`
   — **it is not a git checkout on the server**. PM2 process names:
-  `nodenanny-monitor`, `nodenanny-panel`, `nodenanny-pool`.
+  `nodenanny-monitor`, `nodenanny-panel`, `nodenanny-pool`. **The maintainer's actual
+  day-to-day access is `https://186.244.208.32:49769` (self-signed cert + HTTP Basic
+  Auth), not an SSH tunnel** — see `deploy/experimental-server-access-notes.md` for
+  the full access setup (a second port, `35319`, exposes only the subscription path,
+  no auth). That file also documents that the panel-login / terminal-unlock /
+  port-`49769` Basic-Auth passwords are **deliberately identical** — a maintainer
+  choice on a zero-budget solo project, not an oversight; don't "fix" it unprompted.
+  None of these credentials are ever written into this file or any git-tracked file.
 
 ## File → PM2 process map
 
@@ -74,6 +81,15 @@ changing — don't guess from the list below if it's ambiguous.
 `config/config.json` is gitignored (it holds secrets — SMTP credentials, API keys,
 panel password). `config/config.example.json` is the committed template. **Never**
 write real secrets into this file, into a commit, or into any handoff/chat document.
+
+## Running the test suite in a sandbox
+
+`node-pty` (needed for the terminal feature) is a native module and typically fails
+to compile in a throwaway sandbox with no matching prebuilt binary. If you need to
+run `npm install` in a sandbox to execute the test suite, temporarily remove
+`node-pty` from `package.json`'s dependencies first, run the tests, then restore it
+and confirm a clean `git diff` on `package.json`/`package-lock.json` before handing
+anything back — don't let a sandbox workaround leak into a real commit.
 
 ## Invariants — do not break these without the maintainer's explicit sign-off
 
