@@ -865,16 +865,19 @@ async function doRefreshPool(config) {
           });
         }
       }
-      // 这里的异常检测(同一身份多服务器)不做前面manual-tg-sub那样的特殊豁免——
-      // 原始节点直接来自不同频道的原文粘贴,身份重合更可能是真的可疑信号(不像
-      // 订阅服务那样有"多地区正常设计"这个已知的良性解释),按标准规则处理，
-      // 该拉黑就拉黑。
+      // 2026-08-03 founder明确决定:telegram-raw-pool应该是长期固定保留的池子,
+      // 不应该被异常检测拉黑——跟manual-tg-sub用一样的处理方式:异常检测本身
+      // 依然照常计算、依然记录进poolEvents/返回值里(anomalyDetected字段不变,
+      // 面板/日志都还看得到),只是不再拿去影响这个池子自己的试用期/拉黑判断。
+      // (原先的设计是"原始节点直接来自不同频道的原文粘贴,身份重合更可能是真的
+      // 可疑信号,应该正常拉黑"——但实测发现不同频道会各自贴一些示例/占位性质的
+      // 假节点,容易造成"同一身份出现在多个server"的误判,founder决定统一豁免。)
       const anomalyDetected = detectAnomaly(passedLinks);
       const state = measuredCount > 0
         ? sourceTrust.recordCheckResult(TELEGRAM_RAW_POOL_SOURCE_ID, {
             totalChecked: measuredCount,
             passed: passedLinks.length,
-            anomalyDetected
+            anomalyDetected: false
           })
         : sourceTrust.getSourceState(TELEGRAM_RAW_POOL_SOURCE_ID);
       const weight = state ? state.weight : 0;
