@@ -65,7 +65,28 @@ function coerceScalar(raw) {
 }
 
 // 找到顶层"proxies:"这一行,返回它下面属于这个列表的原始行(indent, text),
-// 直到遇到缩进 <= "proxies:"本身缩进的下一个顶层key为止。
+// 直到proxies列表真正结束为止。
+//
+// 修复记录(2026-08-02,真实频道数据核实后确认的真实bug,不是原方案就有的设计):
+// 此前这里认定"缩进 <= proxies:本身缩进 = 列表结束",这个假设只对"列表项比
+// proxies:缩进更深"这一种YAML写法成立,例如:
+//   proxies:
+//     - name: xxx
+// 但YAML同样允许(而且不少真实clash订阅生成器就是这么写的,这次核实的clashv8、
+// wxdy666两个真实频道都是这种写法)"列表项跟proxies:本身缩进对齐"的写法:
+//   proxies:
+//   - name: xxx
+// 这种写法下,第一条列表项的缩进本来就等于proxies:的缩进,旧逻辑一读到第一行
+// 就误判"已经跳出列表",直接return了空数组——两个真实频道之前"识别成unrecognized、
+// 0个候选节点",根源就是这里,不是内容本身有问题。
+// 修复方式:不再假定列表项缩进一定比proxies:更深,而是以"实际遇到的第一条列表项
+// 的缩进"作为这个列表的基准缩进(listIndent),之后:
+//   - 缩进比listIndent更深 => 这是当前proxy内部的嵌套字段,继续收进当前proxy
+//   - 缩进等于listIndent且是"- "开头 => 新的一条列表项(新的proxy),继续收
+//   - 缩进等于listIndent但不是"- "开头 => 遇到了同级的下一个顶层key(flush-left
+//     写法下,proxies列表结束的唯一可靠信号),列表结束
+//   - 缩进比listIndent更浅 => 无论如何都已经跳出这个列表(缩进写法下,proxies
+//     列表结束)
 function extractProxiesBlockLines(rawText) {
   const allLines = rawText.split(/\r?\n/);
   let proxiesIndent = null;
@@ -83,13 +104,26 @@ function extractProxiesBlockLines(rawText) {
   if (startIdx === -1) return [];
 
   const blockLines = [];
+  let listIndent = null; // 列表项的基准缩进,取实际遇到的第一条列表项为准,不假定比proxiesIndent深
   for (let i = startIdx; i < allLines.length; i++) {
     const raw = allLines[i];
     const line = stripComment(raw);
     if (/^\s*$/.test(line)) continue;
     const indent = line.match(/^(\s*)/)[1].length;
-    if (indent <= proxiesIndent) break; // 回到顶层,proxies列表结束
-    blockLines.push({ indent, text: line.trim() });
+    const trimmed = line.trim();
+    const isListItem = trimmed.startsWith('- ') || trimmed === '-';
+
+    if (listIndent === null) {
+      // 第一条非空行必须是列表项、且缩进不能比proxies:本身还浅,否则proxies:
+      // 下面根本不是一个列表(比如空列表或格式异常),按"没有proxies内容"处理
+      if (!isListItem || indent < proxiesIndent) return [];
+      listIndent = indent;
+    }
+
+    if (indent < listIndent) break; // 缩进比列表项还浅,proxies列表结束
+    if (indent === listIndent && !isListItem) break; // 同级但不是新列表项,遇到了下一个顶层key,列表结束
+
+    blockLines.push({ indent, text: trimmed });
   }
   return blockLines;
 }
