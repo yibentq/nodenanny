@@ -98,6 +98,80 @@ const DOCUMENT_HREF_RE = /class="tgme_widget_message_document_wrap[^"]*"[^>]*hre
 const TEXT_BLOCK_G_RE = /<div class="([^"]*)tgme_widget_message_text([^"]*)"[\s\S]*?<\/div>/g;
 const HREF_IN_TEXT_RE = /href="(https?:\/\/[^"]+)"/g;
 
+// 2026-08-02修复:见文件末尾"2026-08-02 message_text_link 提取规则修复"说明。
+// 识别正文里"代码块/等宽块"形式书写的链接——Telegram预览页里这类内容会被包在
+// <code>...</code> 或 <pre>...</pre> 里(两种标签都见过真实频道使用,不是只有
+// 一种)。这类块通常是频道作者特意排版成"方便手机长按复制"的正式订阅链接,
+// 跟正文里普通文字自动生成的<a href>链接(往往是频道互推/邀请/推广/返利码
+// 之类无关内容)在真实性上有明显差异,已经拿5个真实频道的真实数据验证过。
+const CODE_OR_PRE_BLOCK_G_RE = /<(code|pre)>([\s\S]*?)<\/\1>/g;
+const URL_IN_BLOCK_RE = /https?:\/\/[^\s<>"']+/;
+
+// 排除"候选链接本身就是Telegram自己的链接"(t.me/telegram.me域名下的任何路径)
+// ——订阅链接不可能是Telegram自己的频道链接、邀请链接、或Telegram自带SOCKS代理
+// 配置链接,这几种全部应该被当成"抓错了",不能当成订阅内容源。见2026-08-02修复说明。
+function isTelegramOwnLink(url) {
+  if (typeof url !== 'string') return true; // 保守起见,解析不出来的一律当成"排除"
+  return /^https?:\/\/(?:www\.)?(?:t|telegram)\.me\//i.test(url.trim());
+}
+
+// 2026-08-02修复(实测zdyz2频道数据发现):有些代码块不是单独一行订阅链接,而是
+// 频道作者把整批节点(vless://、vmess://、anytls://、ss://……)原文粘贴在一个大
+// 代码块里,行与行之间用<br/>分隔。这批节点里偶尔会混进用"https://"当协议头
+// 写法的单个节点URI(形如 https://uuid:uuid@host:port/#备注),这种URL如果被
+// 当成"抓到了订阅链接"去请求,拿回来的显然不是订阅内容。这类节点URI的共同
+// 特征是URL里带"用户信息@主机"这种形态(userinfo@host,真正的订阅API地址
+// 几乎不会这样写,通常是token/key放在query string里),用这一条来排除。
+function looksLikeRawNodeUri(url) {
+  return url.includes('@');
+}
+
+// 简单HTML实体解码,只处理这里实际会遇到的几种(&amp; &lt; &gt; &quot; &#39; &nbsp;)。
+// 注意有些真实频道消息里&被双重转义成了&amp;amp;(founder在fxfxfxfxf66的旧问题链接
+// 里实测遇到过),所以&amp;这一条要循环替换到不再变化为止,不能只替换一轮。
+function decodeHtmlEntities(str) {
+  let prev;
+  let out = str;
+  do {
+    prev = out;
+    out = out.replace(/&amp;/g, '&');
+  } while (out !== prev);
+  return out
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+// 从"正文text块"里找第一个用代码块/等宽块(<code>或<pre>)书写、且不是Telegram
+// 自己链接的候选URL。按文档顺序(消息里先出现的在前)取第一个,找不到返回null。
+function extractFirstCodeOrPreLink(bodyTextBlock) {
+  CODE_OR_PRE_BLOCK_G_RE.lastIndex = 0;
+  let match;
+  while ((match = CODE_OR_PRE_BLOCK_G_RE.exec(bodyTextBlock)) !== null) {
+    const inner = match[2];
+    const urlMatch = inner.match(URL_IN_BLOCK_RE);
+    if (urlMatch) {
+      const url = decodeHtmlEntities(urlMatch[0]);
+      if (!isTelegramOwnLink(url) && !looksLikeRawNodeUri(url)) return url;
+    }
+  }
+  return null;
+}
+
+// 从"正文text块"里找第一个普通文字<a href>链接、且不是Telegram自己链接/不是原始
+// 节点URI形态的候选URL(原有逻辑的排除版)。
+function extractFirstAnchorLink(bodyTextBlock) {
+  HREF_IN_TEXT_RE.lastIndex = 0;
+  const hrefMatches = [...bodyTextBlock.matchAll(HREF_IN_TEXT_RE)];
+  for (const m of hrefMatches) {
+    const url = decodeHtmlEntities(m[1]);
+    if (!isTelegramOwnLink(url) && !looksLikeRawNodeUri(url)) return url;
+  }
+  return null;
+}
+
 // 2026-07-30新增:识别"这个链接其实就是Telegram消息本身的永久链接"
 // (形如 https://t.me/频道名/123,频道名后面直接跟纯数字消息ID,没有更多路径)。
 // 起因见文件头本次会话的大段说明:实测+RSSHub源码+Apify输出结构+专用下载器
@@ -179,8 +253,20 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
   // 笼统地说"没找到链接"(那样会掩盖"其实找到了,只是大概率不能用"这个真相)。
   let suspiciousDocumentPermalinkCount = 0;
 
-  // 从最后一条(页面最下面=最新)往前找,第一条能提取出链接的就用它——不是每条消息
-  // 都会带文件,允许跳过纯文字公告类消息去找更早一点的那条真正带文件的。
+  // 2026-08-02修复:真实频道数据(5个频道验证)证明,老逻辑"抓正文第一个<a href>
+  // 链接"经常抓错——正文里常混着频道互推/群组邀请/推广返利码这些普通文字链接,
+  // 而真正的订阅链接如果是频道作者特意排成代码块/等宽块(<code>或<pre>)方便
+  // 手机长按复制的,反而会被跳过。改成:代码块/等宽块链接的优先级高于普通文字
+  // 链接,而且是"全局"优先——只要在整个扫描窗口里(不分哪条消息)找到过一个
+  // 代码块链接,就直接采用最新(离现在最近)的那一个,不会因为某条更晚的消息
+  // 只有普通文字链接就提前采用普通文字链接。只有整个扫描窗口里完全没有任何
+  // 代码块/等宽块链接时,才退回到"离现在最近的那条普通文字链接"当兜底。
+  // 两种候选都排除掉本身是t.me/telegram.me域名的情况(订阅链接不可能是
+  // Telegram自己的频道/邀请/内置代理配置链接,这条规则同时挡掉了实测中
+  // clashv8/wxdy666/fxfxfxfxf66抓错的那几种情况)。
+  let firstAnchorCandidate = null; // { url, scannedBack } —— 离现在最近的一条兜底候选
+
+  // 从最后一条(页面最下面=最新)往前找。
   for (let i = blocks.length - 1; i >= 0; i--) {
     const block = blocks[i];
 
@@ -203,15 +289,31 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
 
     const bodyTextBlock = extractBodyTextBlock(block);
     if (bodyTextBlock) {
-      const hrefMatches = [...bodyTextBlock.matchAll(HREF_IN_TEXT_RE)];
-      if (hrefMatches.length > 0) {
-        // 消息正文里可能不止一个链接,这里取第一个 —— 如实标注:没有做"哪个链接
-        // 更像节点订阅文件"的智能判断(比如优先选.txt/.yaml/.json结尾的),如果
-        // 正文里混了无关链接(频道自己的推广/群组链接排在前面),这里可能会挑错。
-        // 需要拿真实频道的真实消息验证后,再决定要不要加更精细的筛选逻辑。
-        return { ok: true, url: hrefMatches[0][1], source: 'message_text_link', scannedBack: blocks.length - 1 - i };
+      const codeLink = extractFirstCodeOrPreLink(bodyTextBlock);
+      if (codeLink) {
+        // 代码块链接全局最高优先级——找到就是离现在最近的一个,直接返回。
+        return { ok: true, url: codeLink, source: 'message_text_code_link', scannedBack: blocks.length - 1 - i };
+      }
+      if (!firstAnchorCandidate) {
+        const anchorLink = extractFirstAnchorLink(bodyTextBlock);
+        if (anchorLink) {
+          // 如实标注:普通文字链接候选没有做"哪个链接更像节点订阅文件"的智能
+          // 判断(比如优先选.txt/.yaml/.json结尾的),只是已排除掉t.me自身链接。
+          // 只记录离现在最近的这一条,继续往更早的消息扫,万一后面还能找到
+          // 代码块链接(优先级更高)。
+          firstAnchorCandidate = { url: anchorLink, scannedBack: blocks.length - 1 - i };
+        }
       }
     }
+  }
+
+  if (firstAnchorCandidate) {
+    return {
+      ok: true,
+      url: firstAnchorCandidate.url,
+      source: 'message_text_link',
+      scannedBack: firstAnchorCandidate.scannedBack
+    };
   }
 
   if (suspiciousDocumentPermalinkCount > 0) {
@@ -227,6 +329,71 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
 
   return { ok: false, error: 'no_link_found_in_recent_messages' };
 }
+
+// ============================================================================
+// 2026-08-02 message_text_link 提取规则修复
+// ============================================================================
+// 起因:founder提供了5个真实频道(clashv8/wxdy666/zdyz2/fxfxfxfxf66/fq5211)的
+// 公开预览页HTML(t.me/s/频道名 curl下来的真实内容),不是模拟数据。旧逻辑
+// ("抓正文里第一个<a href>链接")在其中3个频道上验证出真的抓错了——不是没抓到
+// (程序没报错),是抓到了看起来"成功"、实际无关的链接:
+//   clashv8:      抓到 t.me/mfvpnn8 (频道自己的另一个子频道链接)
+//   zdyz2:        抓到 kutumu.top/#/register?code=... (机场推广的注册返利码)
+//   wxdy666/
+//   fxfxfxfxf66:  抓到 t.me/socks?server=...&port=... (Telegram内置SOCKS代理
+//                 配置链接,而且&被转义成&amp;amp;双重转义,格式本身就是坏的)
+// fq5211这一个反而没问题——它的真链接本来就是普通文字格式,这次纯粹是抓取
+// 那一下网络请求失败,不是提取逻辑的锅。
+//
+// 逐条核对5个频道的真实消息后确认规律:这类频道普遍习惯把"真正的订阅链接"
+// 单独用代码块/等宽块(<code>或<pre>,两种都见过)排一行,方便手机用户长按
+// 复制;而消息正文里穿插的普通文字<a href>链接,反而更可能是频道互推/群组
+// 邀请/推广返利码这些无关内容。据此改成两条规则:
+//   1) 代码块/等宽块(<code>/<pre>)链接优先级高于普通文字链接,而且是"整个
+//      扫描窗口全局优先"——只要往前翻能找到一条代码块链接就直接用,不会因为
+//      更晚的消息只有普通文字链接就提前叼走;只有翻遍整个窗口都没有任何代码块
+//      链接时,才退回普通文字链接兜底(取离现在最近的那一条)。
+//   2) 候选链接本身如果是t.me/telegram.me域名下的任何路径,直接排除——订阅
+//      链接不可能是Telegram自己的频道/邀请/内置代理配置链接。这一条同时挡掉
+//      了clashv8/wxdy666/fxfxfxfxf66三个案例的错误链接。
+//   3) 额外发现(zdyz2真实数据验证时发现,不在founder最初描述的修复范围内,
+//      属于实现过程中顺带补上的一个漏洞):有些代码块不是单独一行订阅链接,
+//      而是频道作者把整批节点原文(vless://、vmess://、anytls://、ss://……,
+//      <br/>分隔)粘贴在一个大代码块里,里面偶尔混进用"https://"当协议头
+//      写法的单个节点URI(形如 https://uuid:uuid@host:port/#备注)。这种
+//      如果被当成订阅链接去请求,拿回来的显然不是订阅内容。这类节点URI的
+//      共同特征是带"用户信息@主机"形态(真正的订阅API地址几乎不会这样写,
+//      通常token/key是放在query string里),用这条规则排除。
+//   4) 顺带修了一个此前一直存在、只是没被专门提起的小问题:提取到的URL没有
+//      做HTML实体解码,遇到query string带多个参数(&被转义成&amp;,个别真实
+//      消息里甚至双重转义成&amp;amp;)时,原样返回的URL其实是坏的。现在统一
+//      解码。
+//
+// 用founder提供的5个真实频道HTML跑过修复后的逻辑,结果(供下一个AI/founder
+// 核对,不代表这几个链接会一直不变——频道内容每天更新,这里记录的是这次验证
+// 时的真实结果,用来证明提取规则本身是对的):
+//   clashv8      -> https://xiaokun8.zmxoo.xyz/subapi?...   (来自<pre>,消息标注"clash订阅")
+//   wxdy666      -> https://b.wazhua.org/web?token=...      (来自<code>,消息标注"订阅链接")
+//   zdyz2        -> https://dingyue.bbec.cc/dingyue/...      (来自<code>,消息带#订阅#免费节点标签)
+//   fxfxfxfxf66  -> https://b.wazhua.org/web?token=...      (跟wxdy666抓到同一条——两个频道
+//                                                             这次恰好转发了同一条赞助商推广,
+//                                                             不是bug,是真实内容重合)
+//   fq5211       -> https://app.sublink.works/x/...          (走的是普通文字兜底,跟founder
+//                                                             之前的分析一致,这个频道本来
+//                                                             就没抓错)
+//
+// 如实标注,尚未解决/需要founder知道的点:
+//   - clashv8这条消息里其实有两条<pre>订阅链接(一条标"clash订阅"、一条标
+//     "苹果/v2订阅"),现在的逻辑取的是文档顺序里第一条出现的(即clash格式)。
+//     如果founder想要的是v2/apple格式,或者想让NodeNanny两种都尝试,需要
+//     founder决定,这里没有自作主张。
+//   - wxdy666这个频道本身比较特殊:它像是"多家机场服务的集合/推荐帐号",
+//     代码块里出现过好几个不同服务商的订阅链接(不只是它自己的),现在的
+//     逻辑只会取离现在最近的那一条,不保证每次都是founder心里认定的"这个
+//     频道该有的那条"——如果founder发现某次结果不是预期的,大概率是这个
+//     频道本身内容性质导致的,不是提取逻辑又抓错了,值得跟founder确认一下
+//     这个频道到底想被当成什么类型的source。
+// ============================================================================
 
 module.exports = {
   isTelegramChannelUrl,
