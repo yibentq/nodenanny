@@ -22,6 +22,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+const https = require('https');
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const RAW_BASE = 'https://raw.githubusercontent.com';
@@ -144,6 +146,86 @@ async function fetchJson(url, headers, timeoutMs) {
   }
 }
 
+// 本轮修复(2026-08-02，fq5211来源诊断出的真实bug):这个来源解析出来的订阅链接
+// (app.sublink.works)会返回一个302跳转，但它把整份节点列表原样塞进了跳转目标
+// 的query string里，Location响应头因此长达几万字节——远超Node内置fetch()(底层是
+// undici)和http/https模块的默认单个响应头大小上限，请求会直接抛出
+// TypeError，err.cause.code是'UND_ERR_HEADERS_OVERFLOW'。这不是这一个来源独有的
+// 问题，是Node网络栈对"异常巨大的单个header"的通用默认限制，所以专门做一个兜底:
+// 正常fetch()失败时，如果确认是这个特定错误类型(不是网络超时、DNS失败等其他原因)，
+// 才退回到Node内置http/https模块，手动加大maxHeaderSize重试一次。
+// 特意不引入任何第三方npm包(比如got/node-fetch的老版本)——项目一直保持零依赖
+// (package.json目前只有express和nodemailer两个真实依赖)，这个问题用内置模块就
+// 能解决，没必要为了一个边缘情况破例加依赖。
+const HEADER_OVERFLOW_MAX_HEADER_SIZE = 262144; // 256KB，留足余量(fq5211实测约30KB)
+const HEADER_OVERFLOW_MAX_REDIRECTS = 5;
+
+function isHeaderOverflowError(err) {
+  return !!(err && err.cause && err.cause.code === 'UND_ERR_HEADERS_OVERFLOW');
+}
+
+// http.get()/https.get()不像fetch()/curl -L那样会自动跟随跳转，这里手动实现，
+// 加一个跳转跳数上限防止极端情况下的死循环。每一跳都用加大maxHeaderSize的内置
+// 模块请求，因为巨大的Location头往往不会只出现在第一跳。
+function fetchTextViaNodeHttp(url, headers, timeoutMs, redirectsLeft) {
+  return new Promise((resolve) => {
+    let currentUrl;
+    try {
+      currentUrl = new URL(url);
+    } catch (err) {
+      resolve({ ok: false, status: 0, error: `invalid url: ${err.message}` });
+      return;
+    }
+    const client = currentUrl.protocol === 'http:' ? http : https;
+    const req = client.get(
+      currentUrl,
+      {
+        headers,
+        maxHeaderSize: HEADER_OVERFLOW_MAX_HEADER_SIZE,
+        timeout: timeoutMs || DEFAULT_REQUEST_TIMEOUT_MS
+      },
+      (res) => {
+        const status = res.statusCode;
+        // 3xx跳转:手动跟到下一跳，不在这一跳读取正文
+        if (status >= 300 && status < 400 && res.headers.location) {
+          res.resume(); // 丢弃这一跳的正文，避免socket卡住
+          if (redirectsLeft <= 0) {
+            resolve({ ok: false, status, error: 'too many redirects (header-overflow fallback path)' });
+            return;
+          }
+          let nextUrl;
+          try {
+            nextUrl = new URL(res.headers.location, currentUrl).toString();
+          } catch (err) {
+            resolve({ ok: false, status, error: `invalid redirect location: ${err.message}` });
+            return;
+          }
+          resolve(fetchTextViaNodeHttp(nextUrl, headers, timeoutMs, redirectsLeft - 1));
+          return;
+        }
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => {
+          if (status < 200 || status >= 300) {
+            resolve({ ok: false, status });
+            return;
+          }
+          resolve({ ok: true, text: Buffer.concat(chunks).toString('utf-8') });
+        });
+        res.on('error', (err) => {
+          resolve({ ok: false, status: 0, error: err.message });
+        });
+      }
+    );
+    req.on('timeout', () => {
+      req.destroy(new Error('timeout'));
+    });
+    req.on('error', (err) => {
+      resolve({ ok: false, status: 0, error: err.message });
+    });
+  });
+}
+
 async function fetchText(url, timeoutMs) {
   // 本轮修复(创始人反馈"旺财"手动订阅源一直测不出候选节点):此前这里裸调用
   // fetchWithTimeout(url, {}, timeoutMs)，完全没带任何请求头。GitHub API那条路径
@@ -153,10 +235,15 @@ async function fetchText(url, timeoutMs) {
   // 识别不出节点，最终会静默判定成"这一轮0个候选"，看起来就像来源没人维护，实际上
   // 只是请求没伪装成一个正常客户端。这里补上跟GitHub路径一致的User-Agent。
   const headers = { 'User-Agent': 'NodeNanny-RepoFetch' };
-  const res = await fetchWithTimeout(url, { headers }, timeoutMs);
-  if (!res.ok) return { ok: false, status: res.status };
-  const text = await res.text();
-  return { ok: true, text };
+  try {
+    const res = await fetchWithTimeout(url, { headers }, timeoutMs);
+    if (!res.ok) return { ok: false, status: res.status };
+    const text = await res.text();
+    return { ok: true, text };
+  } catch (err) {
+    if (!isHeaderOverflowError(err)) throw err; // 只兜底这一种已知错误类型，别的错误照常往外抛
+    return fetchTextViaNodeHttp(url, headers, timeoutMs, HEADER_OVERFLOW_MAX_REDIRECTS);
+  }
 }
 
 // 取仓库默认分支,拿不到就依次尝试常见分支名兜底,不让一次接口失败就整个来源放弃。
