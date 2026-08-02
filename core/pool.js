@@ -35,6 +35,17 @@ const DATA_DIR = path.join(__dirname, '..', 'data');
 const POOL_FILE = path.join(DATA_DIR, 'pool.json');
 const FETCH_SCRIPT = path.join(__dirname, '..', 'scripts', 'pool-fetch.sh');
 const AGGREGATOR_SOURCE_ID = 'aggregator-default';
+// 本轮新增(founder拍板的架构调整,交接文档有完整记录):Telegram频道消息里作者
+// 原文直接贴的原始节点链接(不是订阅链接,本身就能用),汇总进这一个共享、固定
+// 命名的池子,来源身份是这个常量本身,不是某个具体频道——因为这些节点严格来说
+// 不"属于"任何一个manualSources条目,是所有TG频道来源共同贡献的一个混合池。
+// 特意跟legacy的AGGREGATOR_SOURCE_ID('aggregator-default')区分开、不复用/不合并
+// ——founder已经证实legacy aggregator这条老路径基本没有产出(截图显示0/14通过率),
+// 新的telegram-raw-pool不应该被那边拖累,是一个全新的、独立的来源。
+// 这个池子走跟GitHub发现来源/manualSources完全相同的试用期/权重/拉黑状态机
+// (source-trust.js),不是fixed:true的绿色通道——原文贴出来的节点不代表可靠，
+// 依然需要持续观察实测通过率。
+const TELEGRAM_RAW_POOL_SOURCE_ID = 'telegram-raw-pool';
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -437,9 +448,30 @@ function resolveManualSourceTrust(manualSource, sourceId, recordArgs) {
   return recordArgs ? sourceTrust.recordCheckResult(sourceId, recordArgs) : sourceTrust.getSourceState(sourceId);
 }
 
+// 从一个URL里提取域名(host),用作"跨天延续的信任身份"——见下面fetchFromManualSource
+// 里的说明。解析失败(极少数畸形URL)就返回null,调用方需要自行兜底。
+function extractUrlDomain(url) {
+  try {
+    return new URL(url).hostname;
+  } catch (err) {
+    return null;
+  }
+}
+
 async function fetchFromManualSource(manualSource, checkerConfig, requestTimeoutMs) {
   const sourceId = `manual:${manualSource.id}`;
   const timeoutMs = requestTimeoutMs || 8000;
+  // trustSourceId:真正喂给source-trust.js(试用期/权重/拉黑判断)的身份标识。
+  // 默认等于sourceId(跟频道/配置条目本身绑定),下面Telegram频道分支会按情况改写。
+  // sourceId本身继续用于展示/分桶(星图、面板里节点归属哪个来源看的是这个),
+  // 两者从这一轮起可以不是同一个值——见下方大段说明。
+  let trustSourceId = sourceId;
+  // rawNodeLinks:这条手动源如果背后是Telegram频道,顺带从同一份频道页面里提取出的
+  // "原文直接贴的原始节点链接"(不是订阅链接,本身就是能用的节点)。非Telegram来源
+  // 恒为空数组。交给调用方(doRefreshPool)汇总进共享的telegram-raw-pool,这里只负责
+  // 提取,不在这个函数内部处理检测/试用期(那些节点不属于这一个manualSource,是
+  // 所有Telegram来源共用的一个池子)。
+  let rawNodeLinks = [];
 
   // 2026-07-30新增:如果这条手动源的url本身是一个Telegram频道链接(t.me/频道名 或
   // t.me/s/频道名),不是具体的订阅/节点文件直链,先用telegram-fetch.js去频道公开
@@ -461,12 +493,45 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
         return r.text;
       }
     });
+    // 本轮新增:不管有没有找到订阅链接,只要页面本身抓成功了(resolved.rawHtml存在),
+    // 就顺手把里面原文贴的原始节点提取出来——这是两件独立的事,订阅链接没找到
+    // 不代表这个频道这次就完全没有可用信号。
+    if (resolved.rawHtml) {
+      try {
+        rawNodeLinks = telegramFetch.extractRawNodeLinks(resolved.rawHtml);
+      } catch (err) {
+        console.error(`[pool] ${sourceId}(手动订阅源,Telegram频道) 提取原始节点链接出错(不影响订阅链接抓取): ${err.message}`);
+      }
+    }
     if (!resolved.ok) {
       console.error(`[pool] ${sourceId}(手动订阅源,Telegram频道) 找不到今天的文件链接: ${resolved.error}`);
-      const state = resolveManualSourceTrust(manualSource, sourceId, null);
-      return { sourceId, passedNodes: [], candidateCount: 0, error: `telegram_resolve_failed: ${resolved.error}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown' };
+      const state = resolveManualSourceTrust(manualSource, trustSourceId, null);
+      return { sourceId, passedNodes: [], candidateCount: 0, error: `telegram_resolve_failed: ${resolved.error}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown', rawNodeLinks };
     }
     effectiveUrl = resolved.url;
+
+    // 本轮新增(founder拍板的架构调整,交接文档有完整记录):此前这里的信任/拉黑身份
+    // 一直是sourceId(即"manual:频道名"本身)——意味着"同一身份出现在多个服务器"
+    // 这类异常检测一旦触发,拉黑的是整个频道配置条目,下次刷新这个manualSource
+    // 直接被跳过,哪怕频道当天换了个完全不同、干净的订阅链接也没用。
+    // founder明确的方向:频道本身要从检测/拉黑判断里"隔离"出来,真正进入检测、
+    // 可能被拉黑的应该是频道里选出来的那条订阅链接自己的身份,不是频道这个配置条目。
+    // 但订阅链接的完整URL本身通常带会员token(fq5211/zdyz2这几个真实来源都是这样,
+    // 每天甚至每次请求都会换一个新token),如果直接拿完整URL当身份,信任状态每天
+    // 都从零开始,试用期永远攒不满——所以改用"这条订阅链接所在的域名"当身份
+    // (比如app.sublink.works、dingyue.bbec.cc),同一个服务商每天发的不同token链接
+    // 依然会被认成同一个来源,历史战绩能累积下去。
+    // 加"manual-tg-sub:"前缀是为了跟其它两类已有的sourceId命名空间(GitHub来源的
+    // "owner/repo"格式、legacy aggregator的"aggregator-default"、以及未走这条分支的
+    // manualSources本身的"manual:id"格式)明确区分开,避免不同性质的信任记录意外
+    // 撞到同一个key上。
+    const domain = extractUrlDomain(effectiveUrl);
+    if (domain) {
+      trustSourceId = `manual-tg-sub:${domain}`;
+    }
+    // domain解析失败(理论上不该发生,resolved.url来自fetchLatestFileUrl已经是个
+    // 看起来合法的URL,但畸形数据不能完全排除)时trustSourceId保持等于sourceId
+    // (退回旧行为),不因为一个边缘情况让整个来源彻底失去信任身份。
   }
 
   let fetchResult;
@@ -481,13 +546,13 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
     // 完全没抓到东西也在pm2 logs里悄无声息，创始人没法判断这个来源到底有没有在跑，
     // 还是配置本身就没生效。这里补上，跟aggregator/discovery来源的日志可见度对齐。
     console.error(`[pool] ${sourceId}(手动订阅源) 请求失败: ${err.message}`);
-    const state = resolveManualSourceTrust(manualSource, sourceId, null);
-    return { sourceId, passedNodes: [], candidateCount: 0, error: err.message, weight: state ? state.weight : 0, status: state ? state.status : 'unknown' };
+    const state = resolveManualSourceTrust(manualSource, trustSourceId, null);
+    return { sourceId, passedNodes: [], candidateCount: 0, error: err.message, weight: state ? state.weight : 0, status: state ? state.status : 'unknown', rawNodeLinks };
   }
   if (!fetchResult.ok) {
     console.error(`[pool] ${sourceId}(手动订阅源) 请求失败: HTTP状态${fetchResult.status}`);
-    const state = resolveManualSourceTrust(manualSource, sourceId, null);
-    return { sourceId, passedNodes: [], candidateCount: 0, error: `Subscription request failed, HTTP status ${fetchResult.status}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown' };
+    const state = resolveManualSourceTrust(manualSource, trustSourceId, null);
+    return { sourceId, passedNodes: [], candidateCount: 0, error: `Subscription request failed, HTTP status ${fetchResult.status}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown', rawNodeLinks };
   }
 
   const parsed = repoFetch.parseSubscriptionContent(fetchResult.text);
@@ -501,8 +566,8 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
     // 打印识别到的格式(unrecognized/empty等)和原始内容长度，方便判断是"内容真的
     // 是空的"还是"抓到的是一个不认识的格式(比如没带UA被重定向到了一个说明页)"。
     console.log(`[pool] ${sourceId}(手动订阅源): 请求成功但没解析出候选节点(格式识别为 ${parsed.format}，原始内容长度 ${(fetchResult.text || '').length} 字符)`);
-    const state = resolveManualSourceTrust(manualSource, sourceId, { totalChecked: 1, passed: 0 });
-    return { sourceId, passedNodes: [], candidateCount: 0, format: parsed.format, weight: state ? state.weight : 0, status: state ? state.status : 'unknown' };
+    const state = resolveManualSourceTrust(manualSource, trustSourceId, { totalChecked: 1, passed: 0 });
+    return { sourceId, passedNodes: [], candidateCount: 0, format: parsed.format, weight: state ? state.weight : 0, status: state ? state.status : 'unknown', rawNodeLinks };
   }
 
   const concurrency = checkerConfig.concurrency || 3;
@@ -527,13 +592,25 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
   }
 
   const anomalyDetected = detectAnomaly(passedLinks);
+  // 本轮AI默认选择(founder当时确认"没问题可以开始了"、但没有对这一条明确表态,
+  // 已经在这轮回复文字里向founder说清楚这是个默认选择,不是既定共识——见交接
+  // 记录):对trustSourceId是"manual-tg-sub:"命名空间(即TG频道解析出的订阅链接)
+  // 的来源,不再把anomalyDetected喂给resolveManualSourceTrust去触发拉黑——一个
+  // 正规的多地区订阅服务,同一账号身份出现在不同服务器上是完全正常的设计
+  // (fq5211那次真实验证过的案例:同一UUID分别在新加坡/美国服务器),不应该被这条
+  // 为"陌生单节点来源伪造身份"设计的规则误伤。检测结果依然计算、依然记录进
+  // poolEvents/返回值里(anomalyDetected字段不变,面板/日志都还看得到),只是不再
+  // 影响这个来源自己的试用期/拉黑判断。非TG来源(trustSourceId还是普通的
+  // "manual:id")行为完全不变,anomalyDetected该拉黑还是拉黑。
+  const isTgSubTrust = trustSourceId.startsWith('manual-tg-sub:');
+  const anomalyForTrust = isTgSubTrust ? false : anomalyDetected;
   const state = measuredCount > 0
-    ? resolveManualSourceTrust(manualSource, sourceId, {
+    ? resolveManualSourceTrust(manualSource, trustSourceId, {
         totalChecked: measuredCount,
         passed: passedLinks.length,
-        anomalyDetected
+        anomalyDetected: anomalyForTrust
       })
-    : resolveManualSourceTrust(manualSource, sourceId, null);
+    : resolveManualSourceTrust(manualSource, trustSourceId, null);
 
   return {
     sourceId, passedNodes,
@@ -541,6 +618,7 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
     totalChecked: measuredCount,
     passed: passedLinks.length,
     anomalyDetected,
+    rawNodeLinks,
     weight: state ? state.weight : 0,
     status: state ? state.status : 'unknown',
     format: parsed.format
@@ -730,6 +808,9 @@ async function doRefreshPool(config) {
   // 不单独开一份配置——没必要为了一个新增的小功能多加一层配置面。默认空数组，
   // 不影响没配置这个字段的现有部署。
   const manualSources = poolConfig.manualSources || [];
+  // 本轮新增:汇总所有TG频道来源这一轮各自提取出的"原文原始节点链接",跨频道合并
+  // 到一起,循环结束后统一去重+送检+记信任状态(见下方telegram-raw-pool处理块)。
+  const collectedRawNodeLinks = [];
   if (manualSources.length > 0) {
     const manualThrottleMs = discoveryConfig.sourceThrottleMs != null ? discoveryConfig.sourceThrottleMs : 500;
     const manualTimeoutMs = discoveryConfig.requestTimeoutMs || 8000;
@@ -749,6 +830,62 @@ async function doRefreshPool(config) {
       if (result.passedNodes.length > 0) {
         anyOk = true;
         buckets.push({ sourceId: result.sourceId, weight: result.weight || 0, nodes: result.passedNodes });
+      }
+      if (Array.isArray(result.rawNodeLinks) && result.rawNodeLinks.length > 0) {
+        collectedRawNodeLinks.push(...result.rawNodeLinks);
+      }
+    }
+  }
+
+  // telegram-raw-pool:上面各TG频道原文贴出的原始节点,跨频道去重后统一送检,
+  // 走标准的试用期/权重状态机(source-trust.js,不是fixed:true那种绿色通道)——
+  // 权重完全由实测通过率决定,新池子从0开始慢慢爬升,不预设任何初始信任度，
+  // 这里没有额外加一个"固定权重"配置项(founder没提出这个需求,不额外加面)。
+  if (collectedRawNodeLinks.length > 0) {
+    const rawPoolCandidateLimit = poolConfig.telegramRawPoolCandidateLimit || 50;
+    const rawCandidates = dedupeCandidateLinks(collectedRawNodeLinks).slice(0, rawPoolCandidateLimit);
+    if (rawCandidates.length > 0) {
+      const concurrency = checkerConfig.concurrency || 3;
+      const checkResults = await checkNodes(rawCandidates, checkerConfig, concurrency);
+      console.log(`[pool] ${TELEGRAM_RAW_POOL_SOURCE_ID}: ${checkResults.filter((r) => r.outcome === 'ok').length}/${rawCandidates.length} 通过。失败层级分布: ${summarizeCheckFailures(checkResults)}`);
+      await poolEvents.recordRound(TELEGRAM_RAW_POOL_SOURCE_ID, rawCandidates, checkResults);
+      const now = new Date().toISOString();
+      const passedLinks = [];
+      const passedNodes = [];
+      let measuredCount = 0;
+      for (let i = 0; i < rawCandidates.length; i++) {
+        const r = checkResults[i];
+        if (r.outcome === 'ok' || r.outcome === 'down') measuredCount += 1;
+        if (r.outcome === 'ok') {
+          passedLinks.push(rawCandidates[i]);
+          passedNodes.push({
+            link: rawCandidates[i], addedAt: now,
+            lastCheck: { outcome: r.outcome, checkedAt: now, layers: r.layers },
+            sourceId: TELEGRAM_RAW_POOL_SOURCE_ID
+          });
+        }
+      }
+      // 这里的异常检测(同一身份多服务器)不做前面manual-tg-sub那样的特殊豁免——
+      // 原始节点直接来自不同频道的原文粘贴,身份重合更可能是真的可疑信号(不像
+      // 订阅服务那样有"多地区正常设计"这个已知的良性解释),按标准规则处理，
+      // 该拉黑就拉黑。
+      const anomalyDetected = detectAnomaly(passedLinks);
+      const state = measuredCount > 0
+        ? sourceTrust.recordCheckResult(TELEGRAM_RAW_POOL_SOURCE_ID, {
+            totalChecked: measuredCount,
+            passed: passedLinks.length,
+            anomalyDetected
+          })
+        : sourceTrust.getSourceState(TELEGRAM_RAW_POOL_SOURCE_ID);
+      const weight = state ? state.weight : 0;
+      sourceSummaries.push({
+        sourceId: TELEGRAM_RAW_POOL_SOURCE_ID, ok: true, error: null,
+        candidateCount: rawCandidates.length, passed: passedNodes.length,
+        weight, status: state ? state.status : 'unknown'
+      });
+      if (passedNodes.length > 0) {
+        anyOk = true;
+        buckets.push({ sourceId: TELEGRAM_RAW_POOL_SOURCE_ID, weight, nodes: passedNodes });
       }
     }
   }
@@ -1082,5 +1219,5 @@ module.exports = {
   getActiveNodesSummary,
   getSourceTrustSummary,
   getStarmapData,
-  _internal: { weightedSelect, detectAnomaly, extractIdentity, resolveNodeTier, runShell, extractHostFromLink, attachCountryCodes, detectProtocolName, countryCodeToFlagEmoji, parseNodeLines }
+  _internal: { weightedSelect, detectAnomaly, extractIdentity, resolveNodeTier, runShell, extractHostFromLink, attachCountryCodes, detectProtocolName, countryCodeToFlagEmoji, parseNodeLines, fetchFromManualSource, extractUrlDomain }
 };

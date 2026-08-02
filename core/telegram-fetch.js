@@ -282,7 +282,7 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
           suspiciousDocumentPermalinkCount += 1;
         } else {
           // href不是消息永久链接形态,是真正看起来独立的地址,按原逻辑当成功返回。
-          return { ok: true, url: href, source: 'document_attachment', scannedBack: blocks.length - 1 - i };
+          return { ok: true, url: href, source: 'document_attachment', scannedBack: blocks.length - 1 - i, rawHtml: html };
         }
       }
     }
@@ -292,7 +292,7 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
       const codeLink = extractFirstCodeOrPreLink(bodyTextBlock);
       if (codeLink) {
         // 代码块链接全局最高优先级——找到就是离现在最近的一个,直接返回。
-        return { ok: true, url: codeLink, source: 'message_text_code_link', scannedBack: blocks.length - 1 - i };
+        return { ok: true, url: codeLink, source: 'message_text_code_link', scannedBack: blocks.length - 1 - i, rawHtml: html };
       }
       if (!firstAnchorCandidate) {
         const anchorLink = extractFirstAnchorLink(bodyTextBlock);
@@ -312,7 +312,8 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
       ok: true,
       url: firstAnchorCandidate.url,
       source: 'message_text_link',
-      scannedBack: firstAnchorCandidate.scannedBack
+      scannedBack: firstAnchorCandidate.scannedBack,
+      rawHtml: html
     };
   }
 
@@ -323,11 +324,17 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
     return {
       ok: false,
       error: 'document_links_found_but_all_were_message_permalinks_not_direct_file_urls',
-      suspiciousCount: suspiciousDocumentPermalinkCount
+      suspiciousCount: suspiciousDocumentPermalinkCount,
+      rawHtml: html
     };
   }
 
-  return { ok: false, error: 'no_link_found_in_recent_messages' };
+  // 2026-08-02新增:即使完全没找到"订阅链接"候选,html本身依然是成功抓到的——
+  // 调用方(core/pool.js)可能还想从这同一份html里额外提取"频道作者直接原文粘贴
+  // 的原始节点链接"(不是订阅链接,是vless://等可以直接用的节点URI本身,见本文件
+  // 末尾extractRawNodeLinks的说明),所以这里也把rawHtml带上,不要求调用方为了
+  // 拿原始节点而重新发一次网络请求。
+  return { ok: false, error: 'no_link_found_in_recent_messages', rawHtml: html };
 }
 
 // ============================================================================
@@ -395,8 +402,77 @@ async function fetchLatestFileUrl(channelUrl, { fetchText } = {}) {
 //     这个频道到底想被当成什么类型的source。
 // ============================================================================
 
+// ============================================================================
+// 2026-08-02(下一轮会话)新增:提取频道消息里"原文直接粘贴的原始节点链接"
+// ============================================================================
+// 背景(founder本轮拍板的架构,见交接文档记录):TG频道消息里出现的链接分两种性质
+// 完全不同的东西——(a)一条"订阅链接"(fetchLatestFileUrl找的就是这个),抓回来还
+// 要再解析出一批节点,本身不是能直接连的节点;(b)频道作者直接把一整批vless://、
+// vmess://、ss://、trojan://……这种原始节点URI原文贴在消息里,本身就是能直接用的
+// 节点,不需要再多抓一次。
+// 之前的代码(looksLikeRawNodeUri)只用这类URI的特征(带"用户信息@主机"形态)来
+// "排除"——防止误把一条原始节点链接当成订阅链接去抓,但排除之后这些原始节点本身
+// 从来没被真正利用过,直接被丢弃了。这个函数把它们捞出来,交给调用方(core/pool.js)
+// 汇总进一个共享的"telegram-raw-pool"节点池,跟其它来源一样走正常的三层检测+
+// 试用期状态机(不是直接信任,原始粘贴的节点不代表节点本身可靠)。
+//
+// 实现方式:复用已有的splitMessageBlocks/extractBodyTextBlock(会自动跳过"回复
+// 引用"那段摘要块,不会把别人转发/回复的旧内容误当成这条消息自己发的),对每条
+// 消息的正文文本块做:
+//   1) 把<br/>(及其变体<br>、<br />)换成换行符——频道作者贴一整批节点时,消息里
+//      看起来是"一行一个",但HTML里其实是<br/>分隔,不是真正的换行字符。
+//   2) 去掉其余HTML标签,保留纯文本。
+//   3) 对每个受支持的协议前缀(跟core/proxy-parse.js的PARSERS列表保持同步——
+//      特意不收录ssr://,项目的检测后端sing-box本身就不支持SSR出站,收了也测不过,
+//      收录了反而会在telegram-raw-pool里制造一堆注定失败的候选,徒增检测负担),
+//      找出该前缀开头、直到下一个空白/尖括号/引号为止的完整token。
+//   4) HTML实体解码(复用decodeHtmlEntities,处理&amp;等)。
+// 扫描范围:整个frontend窗口的全部消息(不只是fetchLatestFileUrl最终选中的那一条),
+// 因为"频道当天的订阅链接"和"频道当天/往前几天贴的原始节点"未必出现在同一条消息里,
+// 两者是完全独立的两类信号,分别在各自的扫描逻辑里各找各的,不互相影响判断结果。
+const RAW_NODE_SCHEMES = ['vless://', 'vmess://', 'ss://', 'trojan://', 'hysteria2://', 'hy2://', 'hysteria://', 'tuic://', 'anytls://', 'socks5://'];
+// 逐条转义后拼成一个大的alternation正则,一次扫描同时匹配所有受支持协议,避免
+// 对同一段文本重复跑N次正则。token终止字符跟其它地方的URL提取保持一致
+// (遇到空白/尖括号/双引号/单引号就截断)。
+const RAW_NODE_LINK_G_RE = new RegExp(
+  '(?:' + RAW_NODE_SCHEMES.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')[^\\s<>"\']+',
+  'gi'
+);
+
+function stripHtmlToText(html) {
+  return html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ');
+}
+
+// 给fetchLatestFileUrl返回值里的rawHtml(或调用方自己另外拿到的同一份html)用,
+// 提取出所有看起来是"原始节点URI"的候选,已去重(同一条消息/同一个频道内部去重;
+// 跨频道/跨轮次的去重交给调用方,这里只保证单次调用内部不重复)。找不到就返回
+// 空数组,不是error——"这个频道这次没有原始节点"是完全正常的情况,不是失败。
+function extractRawNodeLinks(html) {
+  if (typeof html !== 'string' || !html) return [];
+  const blocks = splitMessageBlocks(html);
+  const seen = new Set();
+  const result = [];
+  for (const block of blocks) {
+    const bodyTextBlock = extractBodyTextBlock(block);
+    if (!bodyTextBlock) continue;
+    const plainText = stripHtmlToText(bodyTextBlock);
+    RAW_NODE_LINK_G_RE.lastIndex = 0;
+    let m;
+    while ((m = RAW_NODE_LINK_G_RE.exec(plainText)) !== null) {
+      const link = decodeHtmlEntities(m[0]);
+      if (seen.has(link)) continue;
+      seen.add(link);
+      result.push(link);
+    }
+  }
+  return result;
+}
+
 module.exports = {
   isTelegramChannelUrl,
   normalizeToPreviewUrl,
-  fetchLatestFileUrl
+  fetchLatestFileUrl,
+  extractRawNodeLinks
 };
