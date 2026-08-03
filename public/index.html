@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>NodeNanny</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png?v=2">
 <link rel="shortcut icon" type="image/png" href="/assets/favicon.png?v=2">
@@ -49,6 +49,9 @@
   html, body {
     margin: 0;
     min-height: 100vh;
+    /* 2026-08-04：跟wiki.html同一处理由——微信/QQ内置浏览器(X5内核)偶尔算错画布
+       宽度导致布局没能按手机宽度收起来，这里做兜底，不让正文因此被横向裁掉。 */
+    overflow-x: hidden;
     background:
       radial-gradient(ellipse 1100px 640px at 78% -8%, #1c2620 0%, transparent 55%),
       linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);

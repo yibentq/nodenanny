@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
 <title>Wiki百科 · NodeNanny</title>
 <link rel="icon" type="image/png" href="/assets/favicon.png?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,6 +38,11 @@
   html, body {
     margin: 0;
     min-height: 100vh;
+    /* 2026-08-04：兜底用的overflow-x:hidden——微信/QQ内置浏览器(X5内核)偶尔会算错
+       画布宽度，导致.layout的三栏网格没能按手机宽度收起来，正文被横向裁掉一截，
+       用户得自己滑动才能看全。这里不是修那个算错宽度的根因(那是内核自己的毛病，
+       改不了)，只是保证不管内核怎么算错，普通段落文字都不会因为溢出而读不全。 */
+    overflow-x: hidden;
     background: linear-gradient(180deg, var(--bg-a) 0%, var(--bg-b) 100%);
     color: var(--text);
     font-family: 'IBM Plex Sans', -apple-system, 'PingFang SC', 'Hiragino Sans', 'Yu Gothic', 'Microsoft YaHei', sans-serif;
