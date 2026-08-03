@@ -136,6 +136,46 @@ async function main() {
   check('空订阅(候选0条)的来源被正确记录,candidateCount为0',
     secondResult && secondResult.sources.some((s) => s.sourceId === 'manual:empty-test' && s.candidateCount === 0));
 
+  // 2026-08-03新增:复现并锁定本次修复——频道这一轮解析不到今天的订阅链接时,
+  // 不应该借用"manual:<频道id>"这个旧命名空间下可能存在的历史拉黑记录来报状态。
+  // 先手工在sources.json里种一条"manual:tg-resolve-fail-test"的已拉黑记录，模拟
+  // "域名信任隔离上线前遗留下来的旧记录"，再验证:即使这条旧记录是blacklisted，
+  // 频道本轮解析失败时返回的status也不应该是'blacklisted'，而应该是中性的
+  // 'no_link_this_round'，weight锁定为0，且不去读那条旧记录。
+  sourceTrust.recordCheckResult('manual:tg-resolve-fail-test', { totalChecked: 1, passed: 0 });
+  sourceTrust.recordCheckResult('manual:tg-resolve-fail-test', { totalChecked: 1, passed: 0 });
+  sourceTrust.recordCheckResult('manual:tg-resolve-fail-test', { totalChecked: 1, passed: 0 });
+  sourceTrust.recordCheckResult('manual:tg-resolve-fail-test', { totalChecked: 1, passed: 0 });
+  const staleState = sourceTrust.getSourceState('manual:tg-resolve-fail-test');
+  check('测试前置条件:手工种的旧记录确实已经是blacklisted状态(模拟历史遗留)',
+    staleState && staleState.status === 'blacklisted');
+
+  const telegramFetchPath = require.resolve('./core/telegram-fetch');
+  require.cache[telegramFetchPath] = {
+    id: telegramFetchPath, filename: telegramFetchPath, loaded: true,
+    exports: {
+      isTelegramChannelUrl: () => true,
+      normalizeToPreviewUrl: (u) => u,
+      fetchLatestFileUrl: async () => ({ ok: false, error: '模拟:今天频道里没有找到带链接的消息' }),
+      extractRawNodeLinks: () => []
+    }
+  };
+  delete require.cache[require.resolve('./core/pool')];
+  const poolReloaded = require('./core/pool');
+  const tgFailResult = await poolReloaded._internal.fetchFromManualSource(
+    { id: 'tg-resolve-fail-test', name: '模拟频道', url: 'https://t.me/some-test-channel' },
+    baseConfig.pool.checker,
+    8000
+  );
+  check('频道本轮解析不到订阅链接时,status是中性的no_link_this_round,不是借用旧记录的blacklisted',
+    tgFailResult.status === 'no_link_this_round');
+  check('频道本轮解析不到订阅链接时,weight锁定为0',
+    tgFailResult.weight === 0);
+  const staleStateAfter = sourceTrust.getSourceState('manual:tg-resolve-fail-test');
+  check('旧的manual:<id>记录本身没有被这次调用改动(既不读也不写,纯粹不再牵扯)',
+    staleStateAfter && staleStateAfter.status === 'blacklisted' &&
+    staleStateAfter.lastUpdated === staleState.lastUpdated);
+
   console.log(`\n总计: ${pass} 通过, ${fail} 失败`);
   process.exit(fail > 0 ? 1 : 0);
 }

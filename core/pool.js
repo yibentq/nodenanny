@@ -505,8 +505,15 @@ async function fetchFromManualSource(manualSource, checkerConfig, requestTimeout
     }
     if (!resolved.ok) {
       console.error(`[pool] ${sourceId}(手动订阅源,Telegram频道) 找不到今天的文件链接: ${resolved.error}`);
-      const state = resolveManualSourceTrust(manualSource, trustSourceId, null);
-      return { sourceId, passedNodes: [], candidateCount: 0, error: `telegram_resolve_failed: ${resolved.error}`, weight: state ? state.weight : 0, status: state ? state.status : 'unknown', rawNodeLinks };
+      // founder 2026-08-03拍板:"频道"这个名字本身不是一个该被检测/可能被拉黑的身份，
+      // 真正该被判断的是它产出的订阅链接（按域名追踪）本身。这里还没能解析出今天的
+      // 订阅链接，trustSourceId 此时还停在默认值(=sourceId，也就是"manual:频道名"这个
+      // 从设计上就不该再被当成信任身份的旧命名空间)——不能拿它去查sourceTrust，
+      // 会读到域名信任隔离上线之前遗留的旧拉黑/试用期记录，造成"平时正常、偶尔某一轮
+      // 突然显示已拉黑"这种假象（真实复现过：fq5211/zdyz2/fxfxfxfxf66都命中过）。
+      // 直接返回一个中性状态，不读也不写sourceTrust，本轮没有域名身份可言，没有
+      // 状态可报，如实反映"这一轮没抓到链接"就够了。
+      return { sourceId, passedNodes: [], candidateCount: 0, error: `telegram_resolve_failed: ${resolved.error}`, weight: 0, status: 'no_link_this_round', rawNodeLinks };
     }
     effectiveUrl = resolved.url;
 
