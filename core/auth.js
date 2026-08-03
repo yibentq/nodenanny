@@ -69,6 +69,7 @@ function isLocked(ip) {
 function registerFailure(ip) {
   const record = attempts.get(ip) || { count: 0, lockedUntil: 0 };
   record.count += 1;
+  record.updatedAt = Date.now(); // 供下面的sweepStaleAttempts()判断这条记录是不是太久没动过了
   if (record.count >= MAX_ATTEMPTS) {
     record.lockedUntil = Date.now() + LOCK_MS;
     record.count = 0;
@@ -79,6 +80,13 @@ function registerFailure(ip) {
 function registerSuccess(ip) {
   attempts.delete(ip);
 }
+
+// 稳定性审查（2026-08-03）发现：attempts 只在"触发锁定"时才会被清掉，一个 IP
+// 失败1~4次、没到5次锁定线、之后也不再来，这条记录就会永远留在内存里。面板一旦
+// 暴露在公网，遇到大范围扫描（很多不同IP各试一两次密码就换下一个，凑不到锁定
+// 阈值）时，这张表只会单调增长，不会自己瘦身。这里加一个很朴素的兜底：每隔一段
+// 时间扫一遍，把明显是"很久以前失败过、且不在锁定期"的旧记录清掉，不引入任何
+// 定时任务框架，跟这个文件本身"不加多余依赖"的风格保持一致。
 
 // ---------- 终端专属二次鉴权（交接文档v4第二节第11条：终端权限应高于普通登录） ----------
 // 独立的 cookie 名字、独立的密钥（store.getOrCreateTerminalSecret）、更短的有效期。
@@ -130,6 +138,7 @@ function isTerminalLocked(ip) {
 function registerTerminalFailure(ip) {
   const record = terminalAttempts.get(ip) || { count: 0, lockedUntil: 0 };
   record.count += 1;
+  record.updatedAt = Date.now(); // 供下面的sweepStaleAttempts()判断这条记录是不是太久没动过了
   if (record.count >= MAX_ATTEMPTS) {
     record.lockedUntil = Date.now() + LOCK_MS;
     record.count = 0;
@@ -140,6 +149,30 @@ function registerTerminalFailure(ip) {
 function registerTerminalSuccess(ip) {
   terminalAttempts.delete(ip);
 }
+
+// 通用清理函数：把"当前没被锁定，且距最后一次失败已经超过 STALE_MS"的记录删掉。
+// 复用同一份逻辑处理 attempts 和 terminalAttempts 两张表，避免写两遍几乎一样的代码。
+const STALE_MS = 30 * 60 * 1000; // 30分钟没再失败过，就认为这条记录没有继续保留的价值
+
+function sweepStaleAttempts(map) {
+  const now = Date.now();
+  for (const [ip, record] of map) {
+    const stillLocked = record.lockedUntil && now < record.lockedUntil;
+    if (stillLocked) continue;
+    const lastActivity = record.lockedUntil || record.updatedAt || 0;
+    if (now - lastActivity > STALE_MS) {
+      map.delete(ip);
+    }
+  }
+}
+
+// 每10分钟扫一次两张表。用 unref() 避免这个定时器阻止进程正常退出（比如 pm2
+// restart 的时候）——它只是个内存维护任务，不是业务逻辑必须存活的东西。
+const sweepTimer = setInterval(() => {
+  sweepStaleAttempts(attempts);
+  sweepStaleAttempts(terminalAttempts);
+}, 10 * 60 * 1000);
+sweepTimer.unref();
 
 module.exports = {
   COOKIE_NAME,
