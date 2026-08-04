@@ -336,7 +336,7 @@ function build() {
 
   // 站点根目录 index.html：简单落地页，跳到中文索引（默认语言），同时给英文入口
   const rootIndex = `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="google-site-verification" content="zD-4xN6LElLj4kc9UQffMdhSJJsJcMecWgh7bL6JQA4" />
 <title>${SITE_TITLE}</title><style>${BASE_CSS}</style></head>
 <body>
 <div class="topbar"><a href="${BASE_PATH}/wiki/zh/index.html">${SITE_TITLE}</a></div>
