@@ -29,6 +29,9 @@ const REPO_URL = 'https://github.com/yibentq/nodenanny';
 // 如果将来换了自定义域名（那时页面就真的部署在根目录），把这里改成空字符串 '' 即可。
 const BASE_PATH = '/nodenanny';
 
+// sitemap.xml 里用的完整域名(带协议)。同样地，如果将来换自定义域名，这里要跟着改。
+const SITE_ORIGIN = 'https://yibentq.github.io';
+
 // ---------- 以下几个函数直接照搬 core/wiki-manager.js 里的规则，保证行为一致 ----------
 
 function stripOrderPrefix(dirName) {
@@ -193,8 +196,6 @@ main.content a{color:var(--accent);}
 `;
 
 function langSwitchHtml(lang, altUrl, altAvailable) {
-  const zhHref = lang === 'zh' ? '#' : altUrl;
-  const enHref = lang === 'en' ? '#' : altUrl;
   return `<span class="langs">
     <a class="${lang === 'zh' ? 'active' : ''}" href="${lang === 'zh' ? '#' : (altAvailable ? altUrl : '#')}">中文</a>
     <a class="${lang === 'en' ? 'active' : ''}" href="${lang === 'en' ? '#' : (altAvailable ? altUrl : '#')}">EN</a>
@@ -234,6 +235,22 @@ function pageShell({ lang, title, bodyHtml, sidebarHtml, altUrl, altAvailable })
 </html>`;
 }
 
+// ---------- sitemap.xml 生成 ----------
+// 直接复用 build() 里已经算好的 trees（每种语言的分类/文章清单），不用重新扫描文件系统。
+// 每个 URL 都是完整绝对地址（含域名），这是 sitemap.xml 规范要求的，不能用相对路径。
+
+function generateSitemapXml(trees, allPageUrls) {
+  const now = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const urls = [
+    `${SITE_ORIGIN}${BASE_PATH}/`,
+    `${SITE_ORIGIN}${BASE_PATH}/wiki/zh/index.html`,
+    `${SITE_ORIGIN}${BASE_PATH}/wiki/en/index.html`,
+    ...allPageUrls,
+  ];
+  const body = urls.map((u) => `  <url>\n    <loc>${escapeHtml(u)}</loc>\n    <lastmod>${now}</lastmod>\n  </url>`).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${body}\n</urlset>\n`;
+}
+
 function build() {
   if (fs.existsSync(OUT_DIR)) fs.rmSync(OUT_DIR, { recursive: true, force: true });
   fs.mkdirSync(OUT_DIR, { recursive: true });
@@ -265,6 +282,7 @@ function build() {
   }
 
   let pageCount = 0;
+  const allPageUrls = []; // sitemap 用：收集每个生成页面的完整绝对 URL
 
   for (const lang of LANGS) {
     const otherLang = lang === 'zh' ? 'en' : 'zh';
@@ -295,7 +313,6 @@ function build() {
         const body = `<h1>${escapeHtml(title)}</h1>${meta.updated ? `<div class="meta">${lang === 'en' ? 'Updated' : '更新于'} ${escapeHtml(meta.updated)}</div>` : ''}${notice}${safeHtml}`;
 
         const altUrl = pageUrl(otherLang, cat.categoryId, pageMeta.slug);
-        // 判断切换到另一种语言是否真的有对应文章（用另一语言的tree核对一下）
         const altAvailable = !!(trees[otherLang].find((c) => c.categoryId === cat.categoryId)?.pages.find((p) => p.slug === pageMeta.slug));
 
         const html = pageShell({
@@ -311,6 +328,7 @@ function build() {
         fs.mkdirSync(path.dirname(outPath), { recursive: true });
         fs.writeFileSync(outPath, html);
         pageCount++;
+        allPageUrls.push(`${SITE_ORIGIN}${pageUrl(lang, cat.categoryId, pageMeta.slug)}`);
       }
     }
 
@@ -354,11 +372,14 @@ function build() {
 </body></html>`;
   fs.writeFileSync(path.join(OUT_DIR, 'index.html'), rootIndex);
 
-  // .nojekyll：防止 GitHub Pages 用 Jekyll 处理（我们的输出目录里没有下划线开头的特殊文件问题，
-  // 但保留这个是 GitHub Pages 纯静态站点的标准约定，避免任何潜在的 Jekyll 干扰）
+  // .nojekyll：防止 GitHub Pages 用 Jekyll 处理
   fs.writeFileSync(path.join(OUT_DIR, '.nojekyll'), '');
 
-  console.log(`[build-wiki-site] 完成，共生成 ${pageCount} 篇文章页 + ${LANGS.length} 个语言索引页。输出目录：${OUT_DIR}`);
+  // sitemap.xml：列出根页面 + 两个语言索引页 + 全部文章页，供 Google Search Console 提交
+  const sitemapXml = generateSitemapXml(trees, allPageUrls);
+  fs.writeFileSync(path.join(OUT_DIR, 'sitemap.xml'), sitemapXml);
+
+  console.log(`[build-wiki-site] 完成，共生成 ${pageCount} 篇文章页 + ${LANGS.length} 个语言索引页 + 1 份 sitemap.xml。输出目录：${OUT_DIR}`);
 }
 
 build();
