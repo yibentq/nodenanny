@@ -23,6 +23,12 @@ const LANGS = ['zh', 'en']; // 只做中英文，其余语言(ja/de/ru)不生成
 const SITE_TITLE = 'NodeNanny Wiki';
 const REPO_URL = 'https://github.com/yibentq/nodenanny';
 
+// GitHub Pages 的"项目站点"（仓库名不是 <user>.github.io 这种特殊仓库）实际发布在
+// https://<user>.github.io/<repo>/ 这个子路径下，不是域名根目录。之前漏加了这个前缀，
+// 导致站内所有 "/wiki/..." 这种绝对路径链接都跳错（少了 /nodenanny 这一层）。
+// 如果将来换了自定义域名（那时页面就真的部署在根目录），把这里改成空字符串 '' 即可。
+const BASE_PATH = '/nodenanny';
+
 // ---------- 以下几个函数直接照搬 core/wiki-manager.js 里的规则，保证行为一致 ----------
 
 function stripOrderPrefix(dirName) {
@@ -134,7 +140,7 @@ function resolveInternalWikiLink(href, currentCategoryId) {
 }
 
 function pageUrl(lang, categoryId, slug) {
-  return `/wiki/${lang}/${categoryId}/${slug}.html`;
+  return `${BASE_PATH}/wiki/${lang}/${categoryId}/${slug}.html`;
 }
 
 // 渲染前重写 markdown 里的内部链接为静态站真实相对路径，外部链接原样保留。
@@ -213,7 +219,7 @@ function pageShell({ lang, title, bodyHtml, sidebarHtml, altUrl, altAvailable })
 </head>
 <body>
 <div class="topbar">
-  <a href="/wiki/${lang}/index.html">${SITE_TITLE}</a>
+  <a href="${BASE_PATH}/wiki/${lang}/index.html">${SITE_TITLE}</a>
   <div>
     ${langSwitchHtml(lang, altUrl, altAvailable)}
     <a href="${REPO_URL}" style="margin-left:16px;font-weight:400;color:var(--muted);">GitHub ↗</a>
@@ -320,7 +326,7 @@ function build() {
       title: lang === 'en' ? 'NodeNanny Wiki' : 'NodeNanny 百科',
       bodyHtml: `<h1>${lang === 'en' ? 'NodeNanny Wiki' : 'NodeNanny 百科'}</h1>${indexBody}`,
       sidebarHtml: renderSidebar(tree, lang, null, null),
-      altUrl: `/wiki/${otherLang}/index.html`,
+      altUrl: `${BASE_PATH}/wiki/${otherLang}/index.html`,
       altAvailable: true,
     });
     const indexPath = path.join(OUT_DIR, 'wiki', lang, 'index.html');
@@ -333,14 +339,14 @@ function build() {
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${SITE_TITLE}</title><style>${BASE_CSS}</style></head>
 <body>
-<div class="topbar"><a href="/wiki/zh/index.html">${SITE_TITLE}</a></div>
+<div class="topbar"><a href="${BASE_PATH}/wiki/zh/index.html">${SITE_TITLE}</a></div>
 <div class="layout" style="flex-direction:column;">
   <main class="content">
     <h1>NodeNanny Wiki</h1>
     <p>NodeNanny is a post-deployment guardian for a single self-hosted proxy node — Xray / sing-box / v2ray / Shadowsocks / Trojan. This site mirrors the built-in wiki content (Chinese &amp; English) for public search.</p>
     <ul>
-      <li><a href="/wiki/zh/index.html">中文百科 →</a></li>
-      <li><a href="/wiki/en/index.html">English Wiki →</a></li>
+      <li><a href="${BASE_PATH}/wiki/zh/index.html">中文百科 →</a></li>
+      <li><a href="${BASE_PATH}/wiki/en/index.html">English Wiki →</a></li>
       <li><a href="${REPO_URL}">GitHub Repository →</a></li>
     </ul>
   </main>
