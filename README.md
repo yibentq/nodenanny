@@ -7,9 +7,20 @@
 > 2. But servers misbehave from time to time (the process crashes, the protocol gets fingerprinted and blocked) — and if you're not technical, you have no way to notice, let alone fix it.
 > 3. NodeNanny is the "nanny" that watches this server for you: if it goes down, NodeNanny restarts it automatically, emails you about it, and gives you a simple web page where you can check whether everything is healthy — you never need to read a single line of code.
 
-NodeNanny is an automated caretaker tool for people who self-host a proxy node but don't do sysadmin work. It doesn't help you deploy the node itself (the existing one-click scripts already do that well) — it takes over **after** deployment: uptime monitoring, automatic restarts, failure emails, and a status page you can actually understand.
+NodeNanny is an automated caretaker tool for people who self-host a proxy node but don't do sysadmin work. It doesn't help you deploy the node itself (the existing one-click scripts already do that well) — it takes over **after** deployment: uptime monitoring, automatic restarts, failure emails, and a status page you can actually understand. It's protocol-agnostic — **Xray, sing-box, v2ray, Shadowsocks, Trojan**, or anything else — since it only checks whether a TCP port is reachable and runs whatever restart command you give it; it doesn't care what's actually listening on that port.
 
 If you're at the "I've heard of self-hosting a proxy, but I don't even have a server yet and have never touched a terminal" stage, read the two "Before You Start" sections below first, and skip the more technical parts until you actually get stuck.
+
+|  |  |
+|---|---|
+| **What it is** | An uptime "nanny" for one self-hosted proxy node — monitoring, auto-restart, failure alerts, and a status panel |
+| **Works with** | Any proxy software (Xray, sing-box, v2ray, Shadowsocks, Trojan, ...) — protocol-agnostic by design |
+| **Who it's for** | One person, one server, no sysadmin background — **not** a multi-user/multi-node panel (see "What this is NOT" below) |
+| **Cost** | $0 — only your existing VPS bill; no NodeNanny account, no paid dependency |
+| **Requirements** | A ~$5/month VPS (Ubuntu/Debian), 5 minutes in a terminal, that's it |
+| **Tech stack** | Node.js + PM2 + plain JSON files — no database, no Docker |
+| **Panel languages** | Chinese, English, Japanese, German, Russian |
+| **License** | MIT |
 
 ## What this is NOT
 
@@ -341,7 +352,7 @@ Open `PANEL_ACCESS_URL.txt` in the project directory — the access URL generate
 
 ## License
 
-AGPL-3.0
+MIT
 
 ---
 
