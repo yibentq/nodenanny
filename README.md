@@ -1,5 +1,7 @@
 # NodeNanny
 
+[![License: MIT](https://img.shields.io/github/license/yibentq/nodenanny)](https://github.com/yibentq/nodenanny/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/yibentq/nodenanny)](https://github.com/yibentq/nodenanny/releases) [![Stars](https://img.shields.io/github/stars/yibentq/nodenanny?style=social)](https://github.com/yibentq/nodenanny/stargazers)
+
 **You buy the server. NodeNanny watches it for you.**
 
 > **The three-sentence version (for people who don't know anything technical):**

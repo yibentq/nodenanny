@@ -1,5 +1,7 @@
 # NodeNanny
 
+[![License: MIT](https://img.shields.io/github/license/yibentq/nodenanny)](https://github.com/yibentq/nodenanny/blob/main/LICENSE) [![Release](https://img.shields.io/github/v/release/yibentq/nodenanny)](https://github.com/yibentq/nodenanny/releases) [![Stars](https://img.shields.io/github/stars/yibentq/nodenanny?style=social)](https://github.com/yibentq/nodenanny/stargazers)
+
 **你只管买服务器，剩下的 NodeNanny 全程盯着。**
 
 > **三句话说明（写给完全不懂技术的人）**
