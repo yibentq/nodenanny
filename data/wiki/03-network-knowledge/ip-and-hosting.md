@@ -20,7 +20,7 @@ tags: [科普, IP质量, 机房, VPS, 流媒体]
 
 互联网上每一段 IP 地址都归属于一个 **ASN（自治系统编号，Autonomous System Number）**，
 由 ARIN（北美）、RIPE NCC（欧洲/中东）、APNIC（亚太）等五个区域互联网注册机构
-（Regional Internet Registries，RIR）统一分配和记录[^1]。
+（Regional Internet Registries，RIR）统一分配和记录 [1]。
 
 ASN 的持有者可以是：
 
@@ -31,7 +31,7 @@ ASN 的持有者可以是：
 当你访问 Netflix、Google、某个需要地区验证的平台时，对方会对你的出口 IP 做一次
 WHOIS 查询——这是公开数据，任何人都能查——得到这个 IP 的 ASN 归属、持有者名称、
 注册地、IP 段类型。根据这些信息，平台就能判断"这个请求来自一个真实的家庭宽带用户，
-还是来自一台数据中心的服务器？"[^1][^2]
+还是来自一台数据中心的服务器？" [1][2]
 
 ---
 
@@ -49,7 +49,7 @@ BandwagonHost），在 WHOIS 里一眼就能看出来。
 
 ### 原生 IP（Native IP）vs 广播 IP（Broadcast/Anycast IP）
 
-这是一个**以中文社区为主的概念**，在英文技术语境里并没有对应的标准术语[^3]。
+这是一个**以中文社区为主的概念**，在英文技术语境里并没有对应的标准术语 [3]。
 
 - **原生 IP**：这段 IP 的注册地国家和服务器实际所在国家一致。比如一台部署在
   日本东京的服务器，IP 的 WHOIS 注册信息也显示"日本"，两者匹配。
@@ -59,7 +59,7 @@ BandwagonHost），在 WHOIS 里一眼就能看出来。
 
 在流媒体解锁的场景里，原生 IP 通常比广播 IP 解锁效果更好，因为注册地和实际
 路由地一致，平台的地理核查更难发现矛盾。但这个差异的实际效果相当"玄学"——
-同一台服务器的解锁情况会随时间变化，平台更新黑名单之后，昨天能用的今天可能就不行了[^3]。
+同一台服务器的解锁情况会随时间变化，平台更新黑名单之后，昨天能用的今天可能就不行了 [3]。
 
 ### 住宅 IP / 家宽 IP（Residential IP）
 
@@ -105,6 +105,6 @@ NodeNanny 的备用池节点来自 Telegram 频道等公开来源，这类节点
 
 ## 参考来源
 
-[^1]: ARIN（北美互联网注册机构）官方文档，自治系统编号（ASN）分配和 WHOIS 数据说明：https://www.arin.net/resources/guide/asn/
-[^2]: Predax 博客《ASN Blocking Explained》，解释了平台如何通过 WHOIS/ASN 查询区分数据中心 IP 和住宅 IP：https://predax.io/blog/asn-based-blocking-explained
-[^3]: MeowVPS 博客《VPS IP质量检测指南》，指出"原生 IP vs 广播 IP"是中文社区特有概念，解锁效果差异"比较玄学"，并汇总了常用检测工具：https://meowvps.com/blog/ipcheck/
+1. ARIN（北美互联网注册机构）官方文档，自治系统编号（ASN）分配和 WHOIS 数据说明：https://www.arin.net/resources/guide/asn/
+2. Predax 博客《ASN Blocking Explained》，解释了平台如何通过 WHOIS/ASN 查询区分数据中心 IP 和住宅 IP：https://predax.io/blog/asn-based-blocking-explained
+3. MeowVPS 博客《VPS IP质量检测指南》，指出"原生 IP vs 广播 IP"是中文社区特有概念，解锁效果差异"比较玄学"，并汇总了常用检测工具：https://meowvps.com/blog/ipcheck/
